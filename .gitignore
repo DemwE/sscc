@@ -1,0 +1,56 @@
+# Build directories
+build/
+deps/
+dist/
+
+# Downloaded source directories
+tcc/
+musl/
+gmp/
+
+# Compiled binaries
+*.o
+*.a
+*.so
+*.exe
+
+# Test files
+test_results/
+hello
+hello.c
+musl_test
+musl_test.c
+gmp_test
+gmp_test.c
+simple_test
+simple_test.c
+test.c
+
+# Temporary files
+*.tmp
+*.log
+*~
+.#*
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Editor files
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# Nix
+result
+result-*
+
+# direnv
+.direnv/
