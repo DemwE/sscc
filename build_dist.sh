@@ -1,4 +1,3 @@
-#!/bin/bash
 # SSCC Distribution Builder
 # Builds the complete SSCC self-contained C compiler with addons
 

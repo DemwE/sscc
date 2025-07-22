@@ -54,15 +54,6 @@ pkgs.mkShell {
   
   shellHook = ''
     echo "🔧 SSCC Build Environment Ready!"
-    echo "📦 Available tools:"
-    echo "   • gcc $(gcc --version | head -1 | cut -d' ' -f4)"
-    echo "   • make $(make --version | head -1 | cut -d' ' -f3)"
-    echo "   • git $(git --version | cut -d' ' -f3)"
-    echo "   • autotools $(autoconf --version | head -1 | cut -d' ' -f4)"
-    echo "   • upx $(upx --version 2>/dev/null | head -1 | cut -d' ' -f2 || echo 'available')"
-    echo "   • zlib $(pkg-config --modversion zlib)"
-    echo "   • lzma $(xz --version 2>/dev/null | head -1 | cut -d' ' -f4 || echo 'available')"
-    echo "   • mtools $(mtools --version 2>/dev/null | head -1 | cut -d' ' -f2 || echo 'available')"
     echo ""
     echo "🚀 To build SSCC:"
     echo "   make           # Build everything"
