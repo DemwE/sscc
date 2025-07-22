@@ -23,37 +23,6 @@ A truly portable, self-contained C compiler based on TCC (Tiny C Compiler) with 
 - **sscc-libextra.addon** - Extended musl libraries (POSIX, threading, networking)
 - **sscc-gmp.addon** - GNU Multiple Precision Arithmetic Library
 
-## 🚀 Quick Start
-
-### Download and Use (No Build Required)
-```bash
-# Download pre-built release
-wget https://github.com/DemwE/sscc/releases/latest/download/sscc-linux-x86_64.tar.xz
-tar -xf sscc-linux-x86_64.tar.xz
-cd sscc-*/
-
-# Compile your first program
-echo '#include <stdio.h>
-int main() { printf("Hello from SSCC!
-"); return 0; }' > hello.c
-
-./sscc -o hello hello.c
-./hello
-```
-
-### Build from Source
-```bash
-# Clone and build
-git clone https://github.com/DemwE/sscc.git
-cd sscc
-
-# Quick build (recommended)
-./build_dist.sh
-
-# Or manual build
-make
-```
-
 ## 💻 Usage Examples
 
 ### Basic Compilation
@@ -72,10 +41,6 @@ make
 ```bash
 # Compile with GMP math library
 ./sscc --addon sscc-gmp.addon -o math math.c -lgmp
-
-# Auto-discovery (place .addon files in current directory)
-cp sscc-gmp.addon .
-./sscc -o math math.c -lgmp  # Automatically uses available addons
 ```
 
 ### Advanced Examples
@@ -174,43 +139,37 @@ make             # Build with all dependencies available
 After building, you'll find:
 
 ```
-dist/sscc-1.1.0/
-├── sscc                    # Self-contained executable (core + TCC embedded)
-├── sscc.bin               # Reference TCC binary (optional)
+dist/sscc-VERSION/
+├── sscc                   # Self-contained executable (core + TCC embedded)
 ├── sscc-libextra.addon    # Extended libraries addon
 └── sscc-gmp.addon         # GMP math library addon
 ```
-
-**Archive formats:**
-- `sscc-1.1.0-linux-x86_64.tar.xz` - Compressed with xz (better compression)
-- `sscc-1.1.0-diskette.img` - 1.44MB floppy disk image
 
 ## 🎯 Architecture
 
 ### Self-Contained Design
 ```
-┌─────────────────────────────────────┐
-│             sscc (main)             │
+┌──────────────────────────────────────┐
+│             sscc (main)              │
 │  ┌─────────────┐ ┌─────────────────┐ │
 │  │ Embedded    │ │ Embedded Core   │ │
 │  │ TCC Binary  │ │ Resources       │ │
 │  │             │ │ • Headers       │ │
 │  │             │ │ • Libraries     │ │
 │  └─────────────┘ └─────────────────┘ │
-└─────────────────────────────────────┘
+└──────────────────────────────────────┘
            │
            ▼
-┌─────────────────────────────────────┐
-│         Runtime Process             │
-│  1. Extract TCC to /tmp/sscc_XXX/   │
-│  2. Extract core headers/libs       │
-│  3. Load available .addon files     │
-│  4. Execute TCC with proper paths   │
-└─────────────────────────────────────┘
+┌──────────────────────────────────────┐
+│         Runtime Process              │
+│  1. Extract TCC to /tmp/sscc_XXX/    │
+│  2. Extract core headers/libs        │
+│  3. Load available .addon files      │
+│  4. Execute TCC with proper paths    │
+└──────────────────────────────────────┘
 ```
 
 ### Addon System
-- **Auto-discovery**: Scans for `*.addon` files in current directory
 - **Explicit loading**: `--addon filename.addon`
 - **Compressed**: Uses LZMA compression for small file sizes
 - **Modular**: Only load what you need
@@ -233,11 +192,10 @@ echo $?  # Should output: 42
 
 | Component | Size | Description |
 |-----------|------|-------------|
-| sscc (self-contained) | ~400KB | Complete compiler with embedded TCC + core |
-| sscc-libextra.addon | ~200KB | Extended POSIX libraries |
-| sscc-gmp.addon | ~300KB | GMP math library |
-| **Total Core** | **~400KB** | **Ready-to-use C compiler** |
-| **With All Addons** | **~900KB** | **Full-featured development environment** |
+| sscc (self-contained) | ~200KB | Complete compiler with embedded TCC + core |
+| sscc-libextra.addon | ~140KB | Extended POSIX libraries |
+| sscc-gmp.addon | ~275KB | GMP math library |
+| **With All Addons** | **~620KB** | **Full-featured development environment** |
 
 *Compare to GCC: ~100MB+ with dependencies*
 
@@ -315,7 +273,6 @@ See individual component licenses for details.
 - [TCC Official Site](https://bellard.org/tcc/)
 - [musl libc](https://musl.libc.org/)
 - [GMP Library](https://gmplib.org/)
-- [Release Downloads](https://github.com/DemwE/sscc/releases)
 
 ---
 
