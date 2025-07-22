@@ -144,10 +144,10 @@ sscc: tcc
 	$(BUILD_DIR)/sscc/embed_resources $(BUILD_DIR)/sscc/temp_include $(BUILD_DIR)/sscc/temp_lib $(BUILD_DIR)/sscc/core.bin
 	
 	# Convert to C source
-	$(BUILD_DIR)/sscc/bin2c $(BUILD_DIR)/sscc/core.bin $(BUILD_DIR)/sscc/core.c
+	$(BUILD_DIR)/sscc/bin2c $(BUILD_DIR)/sscc/core.bin $(BUILD_DIR)/sscc/core.c sscc_archive
 	
 	# Convert TCC binary to C source
-	$(BUILD_DIR)/sscc/bin2c $(BUILD_DIR)/sscc/sscc.bin $(BUILD_DIR)/sscc/tcc_binary.c
+	$(BUILD_DIR)/sscc/bin2c $(BUILD_DIR)/sscc/sscc.bin $(BUILD_DIR)/sscc/tcc_binary.c tcc_binary
 	
 	# Build modular SSCC wrapper with embedded TCC binary
 	@echo "Building self-contained SSCC wrapper..."
@@ -161,14 +161,13 @@ sscc: tcc
 	# Clean up temporary files
 	rm -rf $(BUILD_DIR)/sscc/temp_include $(BUILD_DIR)/sscc/temp_lib
 	rm -f $(BUILD_DIR)/sscc/embed_resources $(BUILD_DIR)/sscc/bin2c $(BUILD_DIR)/sscc/core.bin $(BUILD_DIR)/sscc/core.c $(BUILD_DIR)/sscc/tcc_binary.c
-	# Keep sscc.bin for reference but it's now embedded in sscc
+	# Remove sscc.bin since TCC binary is now embedded in sscc
+	rm -f $(BUILD_DIR)/sscc/sscc.bin
 	
 	@echo "✅ SSCC built successfully!"
 	@echo "Self-contained binary: $(BUILD_DIR)/sscc/sscc ($$(du -h $(BUILD_DIR)/sscc/sscc | cut -f1))"
-	@echo "Reference TCC binary: $(BUILD_DIR)/sscc/sscc.bin ($$(du -h $(BUILD_DIR)/sscc/sscc.bin | cut -f1))"
-	@echo "Total package: $$(du -sh $(BUILD_DIR)/sscc | cut -f1)"
 	@echo ""
-	@echo "✅ Ready for deployment! Modular addon system active."
+	@echo "✅ Ready for deployment! Single self-contained executable."
 
 # Create addon files for modular deployment
 addons: sscc
@@ -213,9 +212,12 @@ install: sscc
 # Clean build artifacts
 clean:
 	rm -rf $(BUILD_DIR)
+	rm -rf dist
 	if [ -d $(TCC_DIR) ]; then cd $(TCC_DIR) && $(MAKE) clean 2>/dev/null || true; fi
 	if [ -d $(MUSL_DIR) ]; then cd $(MUSL_DIR) && $(MAKE) clean 2>/dev/null || true; fi
 	if [ -d $(GMP_DIR) ] && [ -f $(GMP_DIR)/Makefile ]; then cd $(GMP_DIR) && $(MAKE) clean 2>/dev/null || true; fi
+	# Ensure any leftover sscc.bin files are removed
+	find . -name "sscc.bin" -type f -delete 2>/dev/null || true
 
 # Clean everything including dependencies
 distclean: clean
@@ -312,7 +314,7 @@ floppy: sscc addons
 	@echo "Creating complete floppy package..."
 	@mkdir -p dist/sscc-$(VERSION)
 	@cp -r $(BUILD_DIR)/sscc/* dist/sscc-$(VERSION)/
-	# Optional: Remove sscc.bin since it's now embedded in sscc
-	# rm -f dist/sscc-$(VERSION)/sscc.bin
+	# Remove sscc.bin since it's now embedded in sscc
+	rm -f dist/sscc-$(VERSION)/sscc.bin
 	@echo "✅ Floppy package created in dist/sscc-$(VERSION)/"
 	@echo "Package size: $$(du -sh dist/sscc-$(VERSION) | cut -f1)"

@@ -1,9 +1,11 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 int main(int argc, char *argv[]) {
-    if (argc != 3) {
-        fprintf(stderr, "Usage: %s input_file output_file\n", argv[0]);
+    if (argc != 4) {
+        fprintf(stderr, "Usage: %s input_file output_file symbol_name\n", argv[0]);
+        fprintf(stderr, "Example: %s core.bin core.c sscc_archive\n", argv[0]);
         return 1;
     }
     
@@ -20,31 +22,49 @@ int main(int argc, char *argv[]) {
         return 1;
     }
     
-    fprintf(output, "const unsigned char sscc_archive_data[] = {\n");
+    const char *symbol_name = argv[3];
+    
+    // Get file size
+    fseek(input, 0, SEEK_END);
+    long file_size = ftell(input);
+    fseek(input, 0, SEEK_SET);
+    
+    fprintf(output, "const unsigned char %s_data[] = {\n", symbol_name);
     
     int byte;
     int count = 0;
+    int col = 0;
+    
     while ((byte = fgetc(input)) != EOF) {
-        if (count % 16 == 0) {
-            if (count > 0) fprintf(output, "\n");
+        if (col == 0) {
             fprintf(output, "  ");
         }
+        
         fprintf(output, "0x%02x", byte);
         count++;
-        if ((byte = fgetc(input)) != EOF) {
-            ungetc(byte, input);
-            fprintf(output, ", ");
-        } else {
-            break;
+        col++;
+        
+        if (count < file_size) {
+            fprintf(output, ",");
+        }
+        
+        if (col >= 12) {
+            fprintf(output, "\n");
+            col = 0;
+        } else if (count < file_size) {
+            fprintf(output, " ");
         }
     }
     
-    fprintf(output, "\n};\n");
-    fprintf(output, "const unsigned int sscc_archive_size = %d;\n", count);
+    if (col > 0) {
+        fprintf(output, "\n");
+    }
+    fprintf(output, "};\n");
+    fprintf(output, "const unsigned int %s_size = %d;\n", symbol_name, count);
     
     fclose(input);
     fclose(output);
     
-    printf("Converted %d bytes to C source\n", count);
+    printf("Converted %d bytes to C source with symbol '%s'\n", count, symbol_name);
     return 0;
 }
