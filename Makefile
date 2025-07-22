@@ -9,14 +9,13 @@ PREFIX = /usr/local
 
 # TCC repository
 TCC_REPO = https://repo.or.cz/tinycc.git
-MUSL_REPO = https://git.musl-libc.org/cgit/musl
 GMP_REPO = https://gmplib.org/download/gmp/gmp-6.3.0.tar.xz
 
 # Build flags
 CFLAGS = -O2 -Wall
 LDFLAGS = -static
 
-VERSION = 1.1.1
+VERSION = 1.2.0
 
 .PHONY: all clean distclean setup deps tcc musl gmp sscc addons test build compressed package dist help
 
@@ -86,9 +85,9 @@ tcc: musl gmp
 	C_INCLUDE_PATH="$(PWD)/$(BUILD_DIR)/musl/include" \
 	$(MAKE) TCC="../tcc -I$(PWD)/$(BUILD_DIR)/musl/include -I$(PWD)/$(BUILD_DIR)/gmp/include -B.."
 
-# Create the modular SSCC binary with addon support
+# Create the self-contained SSCC binary with addon support
 sscc: tcc
-	@echo "Creating modular SSCC v$(VERSION) with addon support..."
+	@echo "Creating SSCC v$(VERSION) with complete musl functionality..."
 	mkdir -p $(BUILD_DIR)/sscc
 	mkdir -p $(BUILD_DIR)/sscc/temp_lib
 	mkdir -p $(BUILD_DIR)/sscc/temp_include
@@ -97,7 +96,7 @@ sscc: tcc
 	cp $(TCC_DIR)/tcc $(BUILD_DIR)/sscc/sscc.bin
 	@echo "Original TCC binary: $$(du -h $(BUILD_DIR)/sscc/sscc.bin | cut -f1)"
 	
-	# Aggressive optimization
+	# Optimize TCC binary
 	@if command -v strip >/dev/null 2>&1; then \
 		strip --strip-all $(BUILD_DIR)/sscc/sscc.bin; \
 		echo "Stripped binary: $$(du -h $(BUILD_DIR)/sscc/sscc.bin | cut -f1)"; \
@@ -105,27 +104,20 @@ sscc: tcc
 	
 	@if command -v upx >/dev/null 2>&1; then \
 		upx --ultra-brute $(BUILD_DIR)/sscc/sscc.bin 2>/dev/null || echo "UPX failed, continuing"; \
-		echo "Ultra-compressed TCC: $$(du -h $(BUILD_DIR)/sscc/sscc.bin | cut -f1)"; \
+		echo "Compressed TCC: $$(du -h $(BUILD_DIR)/sscc/sscc.bin | cut -f1)"; \
 	fi
 	
 	# Prepare complete core resources with full musl functionality
 	@echo "Preparing complete core resources with full musl..."
 	# Essential TCC runtime
 	cp $(TCC_DIR)/libtcc1.a $(BUILD_DIR)/sscc/temp_lib/
-	# Copy ALL musl headers and directory structure
+	# Copy ALL musl headers and libraries (no filtering since embed_resources now includes everything)
 	cp -r $(BUILD_DIR)/musl/include/* $(BUILD_DIR)/sscc/temp_include/
-	# Ensure bits directory exists and copy all bits headers
-	mkdir -p $(BUILD_DIR)/sscc/temp_include/bits
-	cp $(MUSL_DIR)/obj/include/bits/alltypes.h $(BUILD_DIR)/sscc/temp_include/bits/
-	cp $(MUSL_DIR)/obj/include/bits/syscall.h $(BUILD_DIR)/sscc/temp_include/bits/
-	# Fix missing bits/stdint.h
-	cp $(MUSL_DIR)/obj/include/bits/stdint.h $(BUILD_DIR)/sscc/temp_include/bits/ 2>/dev/null || \
-	cp $(BUILD_DIR)/musl/include/bits/stdint.h $(BUILD_DIR)/sscc/temp_include/bits/ 2>/dev/null || \
-	echo '#include "../stdint.h"' > $(BUILD_DIR)/sscc/temp_include/bits/stdint.h
-	# Copy ALL musl libraries
+	cp -r $(MUSL_DIR)/include/* $(BUILD_DIR)/sscc/temp_include/ 2>/dev/null || true
+	cp -r $(MUSL_DIR)/obj/include/* $(BUILD_DIR)/sscc/temp_include/ 2>/dev/null || true
 	cp $(BUILD_DIR)/musl/lib/*.a $(BUILD_DIR)/sscc/temp_lib/ 2>/dev/null || true
 	
-	# Build minimal core embedder with LZMA
+	# Build resource embedder with LZMA
 	@echo "Building resource embedder..."
 	gcc -O2 -o $(BUILD_DIR)/sscc/embed_resources src/embed_resources.c -llzma
 	
@@ -142,18 +134,18 @@ sscc: tcc
 	# Convert TCC binary to C source
 	$(BUILD_DIR)/sscc/bin2c $(BUILD_DIR)/sscc/sscc.bin $(BUILD_DIR)/sscc/tcc_binary.c tcc_binary
 	
-	# Build modular SSCC wrapper with embedded TCC binary
+	# Build self-contained SSCC wrapper
 	@echo "Building self-contained SSCC wrapper..."
-	gcc -O2 -o build/sscc/sscc src/sscc.c build/sscc/core.c build/sscc/tcc_binary.c -llzma
+	gcc -O2 -DSSCC_VERSION=\"$(VERSION)\" -o build/sscc/sscc src/sscc.c build/sscc/core.c build/sscc/tcc_binary.c -llzma
 	
-	# Ultra-aggressive compression on final binary
+	# Compress final binary
 	@if command -v upx >/dev/null 2>&1; then \
 		upx --ultra-brute $(BUILD_DIR)/sscc/sscc 2>/dev/null || echo "UPX failed on wrapper"; \
 	fi
 	
-	# Clean up temporary files
+	# Clean up temporary files (keep core.c for addon creation)
 	rm -rf $(BUILD_DIR)/sscc/temp_include $(BUILD_DIR)/sscc/temp_lib
-	rm -f $(BUILD_DIR)/sscc/embed_resources $(BUILD_DIR)/sscc/bin2c $(BUILD_DIR)/sscc/core.bin $(BUILD_DIR)/sscc/core.c $(BUILD_DIR)/sscc/tcc_binary.c
+	rm -f $(BUILD_DIR)/sscc/embed_resources $(BUILD_DIR)/sscc/bin2c $(BUILD_DIR)/sscc/core.bin $(BUILD_DIR)/sscc/tcc_binary.c
 	# Remove sscc.bin since TCC binary is now embedded in sscc
 	rm -f $(BUILD_DIR)/sscc/sscc.bin
 	
@@ -164,9 +156,9 @@ sscc: tcc
 
 # Create addon files for modular deployment
 addons: sscc
-	@echo "Creating addon files..."
-	gcc -O2 -o $(BUILD_DIR)/sscc/create_addon src/create_addon.c -llzma
-	@echo "✅ Addon creator built"
+	@echo "Creating addon files with dynamic core exclusion..."
+	gcc -O2 -o $(BUILD_DIR)/sscc/create_addon src/create_addon.c $(BUILD_DIR)/sscc/core.c -llzma
+	@echo "✅ Addon creator built with embedded core data"
 	@echo ""
 	@echo "Creating GMP addon..."
 	cd $(BUILD_DIR)/sscc && ./create_addon gmp \
@@ -175,8 +167,8 @@ addons: sscc
 		../../build/gmp/lib \
 		sscc-gmp.addon
 	@echo ""
-	# Clean up the create_addon utility for release
-	rm -f $(BUILD_DIR)/sscc/create_addon
+	# Clean up the create_addon utility and core.c for release
+	rm -f $(BUILD_DIR)/sscc/create_addon $(BUILD_DIR)/sscc/core.c
 	@echo "✅ GMP addon created successfully!"
 	@ls -lh $(BUILD_DIR)/sscc/*.addon 2>/dev/null || echo "No addon files found"
 
@@ -271,12 +263,6 @@ package: build
 
 # Create distribution tarballs
 dist: compressed
-	@echo "Creating additional distribution formats..."
-	@cd dist && tar -czf sscc-$(VERSION)-complete.tar.gz sscc-$(VERSION)/
-	@echo "Removing .gz file after .xz creation..."
-	@rm -f dist/sscc-$(VERSION)-complete.tar.gz
-	@echo "Distribution files:"
-	@ls -lh dist/sscc-$(VERSION)-complete.*
 	@echo "✅ Distribution archives created in dist/"
 
 # Test the packaged version
@@ -284,5 +270,3 @@ test-package: package
 	@echo "Testing distribution package..."
 	@cd dist/sscc-$(VERSION) && echo "Testing SSCC..." && ./sscc --version 2>/dev/null || echo "SSCC ready for use"
 	@echo "✅ Package test completed successfully!"
-
-# Test the packaged version

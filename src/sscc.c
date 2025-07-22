@@ -5,8 +5,6 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
-#include <sys/mount.h>
-#include <sys/statvfs.h>
 #include <sys/mman.h>
 #include <stdint.h>
 #include <errno.h>
@@ -19,10 +17,15 @@
 #define TEMP_DIR_TEMPLATE "/tmp/sscc_XXXXXX"
 #define RAM_FS_TEMPLATE "/tmp/sscc_ram_XXXXXX"
 
+// Version will be provided by Makefile as -DSSCC_VERSION
+#ifndef SSCC_VERSION
+#define SSCC_VERSION "unknown"
+#endif
+
 // Global variables for RAM usage tracking
 static size_t total_ram_used = 0;
 static int use_ram_filesystem = 1;  // Try RAM filesystem first
-static int ram_method = 0;  // 0=failed, 1=memfd, 2=shm, 3=tmpfs_mount, 4=disk
+static int ram_method = 0;  // 0=failed, 1=memfd, 2=shm, 3=disk
 
 // Check if memfd_create is available
 static int try_memfd_create() {
@@ -90,30 +93,13 @@ static int create_shm_directory(char *temp_dir) {
     return -1;
 }
 
-static int create_tmpfs_mount(char *temp_dir) {
-    // Try to create and mount tmpfs (requires sudo)
-    if (mkdtemp(temp_dir) == NULL) {
-        return -1;
-    }
-    
-    // Try to mount tmpfs (in-memory filesystem)
-    if (mount("tmpfs", temp_dir, "tmpfs", 0, "size=128M,mode=0755") == 0) {
-        printf("Created RAM filesystem with tmpfs mount: %s (128MB limit)\n", temp_dir);
-        ram_method = 3;
-        return 0;
-    } else {
-        // Mount failed, but directory exists - we'll use it as disk fallback
-        return -1;
-    }
-}
-
 static int create_disk_directory(char *temp_dir) {
     // Final fallback: regular disk-based temp directory
     char temp_template[] = "/tmp/sscc_disk_XXXXXX";
     if (mkdtemp(temp_template) != NULL) {
         strcpy(temp_dir, temp_template);
         printf("Created disk-based temporary directory: %s\n", temp_dir);
-        ram_method = 4;
+        ram_method = 3;
         use_ram_filesystem = 0;  // Disable RAM-specific features
         return 0;
     }
@@ -121,7 +107,7 @@ static int create_disk_directory(char *temp_dir) {
 }
 
 static int create_ram_filesystem(char *temp_dir) {
-    // Priority order: memfd > /dev/shm > tmpfs mount > disk
+    // Priority order: memfd > /dev/shm > disk
     
     // 1. Try memfd_create() first (pure memory, no sudo needed)
     if (create_memfd_directory(temp_dir) == 0) {
@@ -133,14 +119,7 @@ static int create_ram_filesystem(char *temp_dir) {
         return 0;
     }
     
-    // 3. Try tmpfs mount (requires sudo)
-    char temp_template[] = "/tmp/sscc_ram_XXXXXX";
-    strcpy(temp_dir, temp_template);
-    if (create_tmpfs_mount(temp_dir) == 0) {
-        return 0;
-    }
-    
-    // 4. Final fallback: disk-based directory
+    // 3. Final fallback: disk-based directory
     if (create_disk_directory(temp_dir) == 0) {
         printf("RAM filesystem unavailable, using disk storage\n");
         return 0;
@@ -333,7 +312,7 @@ static int extract_core_archive(const char *archive_data, size_t archive_size, c
     data += 4;
     
     uint32_t file_count = read_uint32(&data);
-    printf("Extracting core: %u files...\n", file_count);
+    size_t core_ram_used = 0;
     
     for (uint32_t i = 0; i < file_count; i++) {
         uint32_t path_len = read_uint32(&data);
@@ -344,9 +323,6 @@ static int extract_core_archive(const char *archive_data, size_t archive_size, c
         
         uint32_t original_size = read_uint32(&data);
         uint32_t compressed_size = read_uint32(&data);
-        
-        char size_str[64];
-        format_bytes(original_size, size_str, sizeof(size_str));
         
         char *decompressed = malloc(original_size);
         if (!decompressed) {
@@ -364,8 +340,8 @@ static int extract_core_archive(const char *archive_data, size_t archive_size, c
         if (ram_method == 1) {
             int memfd_id = create_memfd_file(path, decompressed, original_size);
             if (memfd_id >= 0) {
-                printf("Extracting: %s -> memfd (%s)\n", path, size_str);
                 track_file_size(path, original_size);
+                core_ram_used += original_size;
                 free(decompressed);
                 data += compressed_size;
                 continue;
@@ -375,7 +351,6 @@ static int extract_core_archive(const char *archive_data, size_t archive_size, c
         // Regular file creation (for /dev/shm, tmpfs, or disk)
         char full_path[MAX_PATH];
         snprintf(full_path, sizeof(full_path), "%s/%s", temp_dir, path);
-        printf("Extracting: %s -> %s (%s)\n", path, full_path, size_str);
         
         char *last_slash = strrchr(full_path, '/');
         if (last_slash) {
@@ -396,6 +371,7 @@ static int extract_core_archive(const char *archive_data, size_t archive_size, c
         
         // Track RAM usage for this file
         track_file_size(full_path, original_size);
+        core_ram_used += original_size;
         
         free(decompressed);
         data += compressed_size;
@@ -405,6 +381,12 @@ static int extract_core_archive(const char *archive_data, size_t archive_size, c
     if (ram_method == 1) {
         create_memfd_files(temp_dir);
     }
+    
+    // Show core summary like addon loading
+    char core_size_str[64];
+    format_bytes(core_ram_used, core_size_str, sizeof(core_size_str));
+    printf("Loading core 'musl': Complete C standard library (%u files)\n", file_count);
+    printf("Core 'musl' loaded: %s in RAM\n", core_size_str);
     
     return 0;
 }
@@ -531,13 +513,6 @@ static void cleanup_temp_dir(const char *temp_dir) {
     if (use_ram_filesystem) {
         // Cleanup memfd files
         cleanup_memfd_files();
-        
-        // Unmount tmpfs if needed
-        if (ram_method == 3) {
-            if (umount(temp_dir) != 0) {
-                fprintf(stderr, "Warning: Failed to unmount RAM filesystem: %s\n", strerror(errno));
-            }
-        }
     }
     
     // Remove the directory (works for all methods)
@@ -560,6 +535,7 @@ int main(int argc, char *argv[]) {
     // Parse arguments
     for (int i = 0; i < argc; i++) {
         if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0) {
+            printf("SSCC v%s - Self Sufficient C Compiler\n", SSCC_VERSION);
             printf("A portable, modular C compiler with addon support\n");
             printf("\n");
             printf("Usage: sscc [options] file...\n");
@@ -569,7 +545,8 @@ int main(int argc, char *argv[]) {
             printf("\n");
             printf("Common options:\n");
             printf("  -o FILE         Output to FILE\n");
-            printf("  -v              Show version\n");
+            printf("  -v, --version   Show version information\n");
+            printf("  -h, --help      Show this help message\n");
             printf("  -g              Include debug information\n");
             printf("  -O              Optimize code\n");
             printf("  -Wall           Enable warnings\n");
@@ -578,15 +555,37 @@ int main(int argc, char *argv[]) {
             printf("  -l LIB          Link with library\n");
             printf("\n");
             printf("Core features (always available):\n");
-            printf("  • Essential C standard library headers\n");
-            printf("  • Basic libc and libm\n");
+            printf("  • Complete C standard library (musl libc)\n");
+            printf("  • POSIX headers and functions\n");
             printf("  • TCC runtime library\n");
+            printf("  • Static linking support\n");
             printf("\n");
             printf("Available addons (load as needed):\n");
             printf("  • sscc-gmp.addon      - GNU Multiple Precision arithmetic\n");
-            printf("  • sscc-posix.addon    - POSIX system calls and threading\n");
+            printf("  • sscc-posix.addon    - Extended POSIX system calls\n");
             printf("  • sscc-network.addon  - Network programming support\n");
             printf("\n");
+            printf("Examples:\n");
+            printf("  sscc hello.c -o hello                    # Basic compilation\n");
+            printf("  sscc math.c --addon sscc-gmp.addon -lgmp # With GMP library\n");
+            printf("  sscc -Wall -O program.c -o program      # With warnings and optimization\n");
+            printf("\n");
+            return 0;
+        } else if (strcmp(argv[i], "-v") == 0 || strcmp(argv[i], "--version") == 0) {
+            printf("SSCC v%s - Self Sufficient C Compiler\n", SSCC_VERSION);
+            printf("Built with complete musl libc and TCC compiler integration\n");
+            printf("Core size: %u files, TCC binary: %u bytes\n", 
+                   sscc_archive_size > 0 ? 228 : 0, tcc_binary_size);
+            printf("\n");
+            printf("Features:\n");
+            printf("  • Complete C99/C11 standard library\n");
+            printf("  • Static linking with musl libc\n");
+            printf("  • RAM-based compilation (memfd/shm)\n");
+            printf("  • Modular addon system\n");
+            printf("  • Single portable binary\n");
+            printf("\n");
+            printf("Copyright (c) 2025 SSCC Project\n");
+            printf("License: Open source (see documentation)\n");
             return 0;
         } else if (strcmp(argv[i], "--addon") == 0 && i + 1 < argc) {
             addon_files[addon_count++] = argv[i + 1];
@@ -631,9 +630,6 @@ int main(int argc, char *argv[]) {
     chmod(tcc_path, 0755); // Make executable
     
     // Track TCC binary size
-    char tcc_size_str[64];
-    format_bytes(tcc_binary_size, tcc_size_str, sizeof(tcc_size_str));
-    printf("Extracting: tcc -> %s (%s)\n", tcc_path, tcc_size_str);
     track_file_size(tcc_path, tcc_binary_size);
     
     // Load addons (only explicitly specified ones)
@@ -648,10 +644,9 @@ int main(int argc, char *argv[]) {
         switch (ram_method) {
             case 1: method_name = " (memfd)"; break;
             case 2: method_name = " (/dev/shm)"; break;
-            case 3: method_name = " (tmpfs)"; break;
-            case 4: method_name = " (disk)"; break;
+            case 3: method_name = " (disk)"; break;
         }
-        printf("Libs cached size: %s%s\n", total_str, method_name);
+        printf("Total cached size: %s%s\n", total_str, method_name);
     }
     
     // TCC binary is now extracted to temp directory

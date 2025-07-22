@@ -1,5 +1,5 @@
-// Minimal core resource embedder for floppy disk deployment
-// Only includes essential C standard library for basic compilation
+// Complete musl resource embedder for SSCC
+// Includes ALL headers and libraries from musl for full POSIX functionality
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -11,30 +11,13 @@
 
 #define MAX_PATH 4096
 
-// Absolute minimum for basic C compilation (floppy disk core)
-const char* core_includes[] = {
-    "stdio.h", "stdlib.h", "string.h", "stddef.h", "stdint.h", 
-    "stdarg.h", "stdbool.h", "math.h", "errno.h", "assert.h",
-    "features.h", "bits/alltypes.h", "bits/syscall.h", "bits/stdint.h",
-    NULL
-};
+// Include ALL musl headers (no filtering)
+// const char* core_includes[] = { NULL }; // Not used - include everything
 
-const char* core_libs[] = {
-    "libc.a", "libm.a", "libtcc1.a", NULL
-};
+// Include ALL musl libraries (no filtering)  
+// const char* core_libs[] = { NULL }; // Not used - include everything
 
-const char* core_objects[] = {
-    "libtcc.o", "tccpp.o", "tccgen.o", "tccelf.o", NULL
-};
-
-static int is_core_file(const char* filename, const char** list) {
-    for (int i = 0; list[i]; i++) {
-        if (strstr(filename, list[i])) {
-            return 1;
-        }
-    }
-    return 0;
-}
+// const char* core_objects[] = { NULL }; // Not used - include everything
 
 static int lzma_compress_data(const char *input, size_t input_size, char **output, size_t *output_size) {
     lzma_stream strm = LZMA_STREAM_INIT;
@@ -68,17 +51,9 @@ static int lzma_compress_data(const char *input, size_t input_size, char **outpu
 }
 
 static int should_include_file(const char* path) {
-    if (strstr(path, "include/")) {
-        // Extract the relative path from include/ onward
-        const char* include_path = strstr(path, "include/") + 8; // Skip "include/"
-        return is_core_file(include_path, core_includes);
-    }
-    
-    if (strstr(path, "lib/")) {
-        const char* filename = strrchr(path, '/');
-        if (filename) filename++;
-        else filename = path;
-        return is_core_file(filename, core_libs) || is_core_file(filename, core_objects);
+    // Include ALL headers and libraries - no filtering for complete musl functionality
+    if (strstr(path, "include/") || strstr(path, "lib/")) {
+        return 1; // Include everything
     }
     
     return 0;
@@ -180,7 +155,7 @@ int main(int argc, char* argv[]) {
     uint32_t file_count = 0;
     fwrite(&file_count, sizeof(uint32_t), 1, archive);
     
-    printf("Creating minimal core archive for floppy disk...\n");
+    printf("Creating complete musl core archive with all headers and libraries...\n");
     
     scan_directory(argv[1], "include", archive, &file_count);
     scan_directory(argv[2], "lib", archive, &file_count);
@@ -193,8 +168,8 @@ int main(int argc, char* argv[]) {
     
     struct stat st;
     stat(argv[3], &st);
-    printf("\nMinimal core archive created: %u files, %ld bytes\n", file_count, st.st_size);
-    printf("Target: Under 1.2MB for floppy disk deployment\n");
+    printf("\nComplete musl core archive created: %u files, %ld bytes\n", file_count, st.st_size);
+    printf("Includes full POSIX functionality from musl\n");
     
     return 0;
 }

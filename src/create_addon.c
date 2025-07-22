@@ -9,19 +9,79 @@
 #include <lzma.h>
 
 #define MAX_PATH 4096
+#define MAX_CORE_FILES 1024
 
-// Core files that should NOT be included in addons (already in core)
-const char* core_files[] = {
-    "stdio.h", "stdlib.h", "string.h", "stddef.h", "stdint.h", 
-    "stdarg.h", "stdbool.h", "math.h", "errno.h", "assert.h",
-    "features.h", "bits/alltypes.h", "bits/syscall.h", "bits/stdint.h",
-    "libc.a", "libm.a", "libtcc1.a",
-    NULL
-};
+// Dynamic core files list (loaded from embedded archive)
+static char core_files[MAX_CORE_FILES][MAX_PATH];
+static int core_file_count = 0;
+
+// External symbols for embedded core archive (same as in sscc.c)
+extern const unsigned char sscc_archive_data[];
+extern const unsigned int sscc_archive_size;
+
+static uint32_t read_uint32(const char **data) {
+    uint32_t val = *(uint32_t*)*data;
+    *data += sizeof(uint32_t);
+    return val;
+}
+
+static int load_core_files_from_archive() {
+    const char *data = (const char*)sscc_archive_data;
+    
+    if (!data || sscc_archive_size < 8) {
+        fprintf(stderr, "Warning: No embedded core archive found, using minimal exclusions\n");
+        // Fallback to basic exclusions
+        strcpy(core_files[0], "libc.a");
+        strcpy(core_files[1], "libm.a");
+        strcpy(core_files[2], "libtcc1.a");
+        core_file_count = 3;
+        return 0;
+    }
+    
+    if (memcmp(data, "CORE", 4) != 0) {
+        fprintf(stderr, "Warning: Invalid core archive format\n");
+        return -1;
+    }
+    data += 4;
+    
+    uint32_t file_count = read_uint32(&data);
+    printf("Loading core file list from embedded archive (%u files)...\n", file_count);
+    
+    core_file_count = 0;
+    for (uint32_t i = 0; i < file_count && core_file_count < MAX_CORE_FILES; i++) {
+        uint32_t path_len = read_uint32(&data);
+        if (path_len >= MAX_PATH) {
+            fprintf(stderr, "Warning: Path too long in core archive\n");
+            return -1;
+        }
+        
+        // Extract just the filename for comparison
+        char full_path[MAX_PATH];
+        memcpy(full_path, data, path_len);
+        full_path[path_len] = '\0';
+        data += path_len;
+        
+        // Store the full path for exclusion
+        strcpy(core_files[core_file_count], full_path);
+        core_file_count++;
+        
+        // Skip the file data
+        uint32_t original_size = read_uint32(&data);
+        uint32_t compressed_size = read_uint32(&data);
+        data += compressed_size;
+        
+        (void)original_size; // Suppress unused warning
+    }
+    
+    printf("Loaded %d core files for exclusion from addons\n", core_file_count);
+    return 0;
+}
 
 static int is_core_file(const char* filename) {
-    for (int i = 0; core_files[i]; i++) {
-        if (strstr(filename, core_files[i])) {
+    // Check against dynamically loaded core files
+    for (int i = 0; i < core_file_count; i++) {
+        // Check if the file path contains this core file
+        if (strstr(filename, core_files[i]) || strstr(core_files[i], filename)) {
             return 1;
         }
     }
@@ -141,6 +201,11 @@ int main(int argc, char* argv[]) {
         fprintf(stderr, "Usage: %s <addon_name> <description> <include_dir> <lib_dir> <output.addon>\n", argv[0]);
         fprintf(stderr, "Example: %s libextra \"Extended musl libraries\" include lib sscc-libextra.addon\n", argv[0]);
         return 1;
+    }
+    
+    // Load core files from embedded archive for automatic exclusion
+    if (load_core_files_from_archive() != 0) {
+        fprintf(stderr, "Warning: Could not load core files list, proceeding with minimal exclusions\n");
     }
     
     const char* addon_name = argv[1];
