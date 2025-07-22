@@ -95,6 +95,8 @@ static int extract_core_archive(const char *archive_data, size_t archive_size, c
         char full_path[MAX_PATH];
         snprintf(full_path, sizeof(full_path), "%s/%s", temp_dir, path);
         
+        printf("Extracting: %s -> %s\n", path, full_path);
+        
         char *last_slash = strrchr(full_path, '/');
         if (last_slash) {
             *last_slash = '\0';
@@ -244,8 +246,11 @@ static void cleanup_temp_dir(const char *temp_dir) {
     system(cmd);
 }
 
-extern const unsigned char sscc_core_data[];
-extern const unsigned int sscc_core_size;
+// External symbols for embedded core archive and TCC binary
+extern const unsigned char sscc_archive_data[];
+extern const unsigned int sscc_archive_size;
+extern const unsigned char tcc_binary_data[];
+extern const unsigned int tcc_binary_size;
 
 int main(int argc, char *argv[]) {
     char *addon_files[64] = {0};
@@ -321,32 +326,32 @@ int main(int argc, char *argv[]) {
     printf("SSCC - Modular C Compiler\n");
     
     // Extract core archive
-    if (extract_core_archive((const char*)sscc_core_data, sscc_core_size, temp_dir) != 0) {
+    if (extract_core_archive((const char*)sscc_archive_data, sscc_archive_size, temp_dir) != 0) {
         fprintf(stderr, "Error: Failed to extract core resources\n");
         cleanup_temp_dir(temp_dir);
         free(filtered_args);
         return 1;
     }
     
-    // Load addons
-    if (addon_count > 0 || access("sscc-gmp.addon", F_OK) == 0 || 
-        access("sscc-posix.addon", F_OK) == 0 || access("sscc-network.addon", F_OK) == 0) {
-        load_addons(temp_dir, addon_files, addon_count);
-    }
-    
-    // Find TCC binary
+    // Extract embedded TCC binary
     char tcc_path[MAX_PATH];
-    char *argv0_copy = strdup(filtered_args[0]);
-    char *prog_dir = dirname(argv0_copy);
-    snprintf(tcc_path, sizeof(tcc_path), "%s/sscc.bin", prog_dir);
-    
-    if (access(tcc_path, X_OK) != 0) {
-        fprintf(stderr, "Error: Cannot find TCC binary at %s\n", tcc_path);
-        free(argv0_copy);
+    snprintf(tcc_path, sizeof(tcc_path), "%s/tcc", temp_dir);
+    FILE *tcc_file = fopen(tcc_path, "wb");
+    if (!tcc_file) {
+        fprintf(stderr, "Error: Cannot create TCC binary at %s\n", tcc_path);
         cleanup_temp_dir(temp_dir);
         free(filtered_args);
         return 1;
     }
+    fwrite(tcc_binary_data, 1, tcc_binary_size, tcc_file);
+    fclose(tcc_file);
+    chmod(tcc_path, 0755); // Make executable
+    
+    // Load addons (always attempt auto-discovery)
+    load_addons(temp_dir, addon_files, addon_count);
+    
+    // TCC binary is now extracted to temp directory
+    // (No need to look for external sscc.bin file)
     
     // Prepare arguments for TCC
     char **tcc_args = malloc((filtered_argc + 10) * sizeof(char*));
@@ -375,7 +380,6 @@ int main(int argc, char *argv[]) {
     
     printf("Starting compilation...\n");
     
-    free(argv0_copy);
     free(filtered_args);
     
     // Execute TCC

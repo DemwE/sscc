@@ -1,278 +1,326 @@
 # SSCC - Self Sufficient C Compiler
 
-A self-contained C compiler based on TCC (Tiny C Compiler) with integrated runtime libraries and modular addon support.
+A truly portable, self-contained C compiler based on TCC (Tiny C Compiler) with integrated runtime libraries and modular addon support. SSCC creates a single executable that contains everything needed to compile C programs.
 
-## Features
+## 🌟 Key Features
 
-SSCC integrates:
-- **TCC** - Fast, lightweight C compiler (v0.9.27)
-- **musl** - Lightweight C standard library (v1.2.5)
-- **GMP** - GNU Multiple Precision Arithmetic Library (v6.3.0)
+- **🔥 Single Executable**: Everything embedded in one binary - no external dependencies
+- **⚡ Fast Compilation**: Based on TCC for lightning-fast compile times
+- **📦 Modular Design**: Core functionality + optional addons as needed
+- **🚀 Portable**: Works on any Linux system without installation
+- **💾 Retro-Friendly**: Fits on a 1.44MB floppy disk for ultimate portability
+- **🎯 Static Linking**: All outputs are statically linked for true portability
 
-The resulting compiler is self-contained and can compile C programs without requiring external libraries or headers. It supports a modular addon system for optional functionality.
+## 📋 What's Included
 
-## Basic Usage
+### Core Components (Always Available)
+- **TCC v0.9.27** - Fast, lightweight C compiler
+- **musl v1.2.5** - Lightweight C standard library
+- **Essential headers**: stdio.h, stdlib.h, string.h, math.h, etc.
+- **Core libraries**: libc.a, libm.a, libtcc1.a
 
-Once built, SSCC is a self-contained C compiler that can be used just like any other C compiler:
+### Optional Addons
+- **sscc-libextra.addon** - Extended musl libraries (POSIX, threading, networking)
+- **sscc-gmp.addon** - GNU Multiple Precision Arithmetic Library
 
+## 🚀 Quick Start
+
+### Download and Use (No Build Required)
 ```bash
-# Compile a simple program
-./build/sscc/sscc -o hello hello.c
+# Download pre-built release
+wget https://github.com/DemwE/sscc/releases/latest/download/sscc-linux-x86_64.tar.xz
+tar -xf sscc-linux-x86_64.tar.xz
+cd sscc-*/
 
-# Compile with optimization
-./build/sscc/sscc -O2 -o hello hello.c
+# Compile your first program
+echo '#include <stdio.h>
+int main() { printf("Hello from SSCC!
+"); return 0; }' > hello.c
 
-# Get help and usage information
-./build/sscc/sscc --help
-
-# Use addon functionality
-./build/sscc/sscc --addon sscc-gmp.addon -o math math.c -lgmp
-
-# Run the compiled program
+./sscc -o hello hello.c
 ./hello
 ```
 
-## Addon System
+### Build from Source
+```bash
+# Clone and build
+git clone https://github.com/DemwE/sscc.git
+cd sscc
 
-SSCC supports modular addons for optional functionality:
+# Quick build (recommended)
+./build_dist.sh
 
+# Or manual build
+make
+```
+
+## 💻 Usage Examples
+
+### Basic Compilation
+```bash
+# Simple program
+./sscc -o program program.c
+
+# With optimization
+./sscc -O2 -o fast_program program.c
+
+# With debugging info
+./sscc -g -o debug_program program.c
+```
+
+### Using Addons
 ```bash
 # List available addons
-./build/sscc/sscc --list-addons
+./sscc --list-addons
 
-# Load specific addon
-./build/sscc/sscc --addon filename.addon [options] file.c
+# Compile with GMP math library
+./sscc --addon sscc-gmp.addon -o math math.c -lgmp
 
-# Auto-discovery of addons
-# Place *.addon files in current directory for automatic loading
+# Auto-discovery (place .addon files in current directory)
+cp sscc-gmp.addon .
+./sscc -o math math.c -lgmp  # Automatically uses available addons
 ```
 
-### Command Line Options
+### Advanced Examples
 
-SSCC supports all standard TCC options plus the following helpful commands:
-
-```bash
-# Display comprehensive help
-./build/sscc/sscc --help
-
-# Show version information
-./build/sscc/sscc --version
-
-# Enable debugging info
-./build/sscc/sscc -g -o debug_program program.c
-
-# Add include paths
-./build/sscc/sscc -I/path/to/headers -o program program.c
-
-# Link with specific libraries (already includes musl and GMP)
-./build/sscc/sscc -o math_program math_program.c -lgmp
-```
-
-### Example Programs
-
-Create a simple Hello World program:
+**Simple Hello World:**
 ```c
 #include <stdio.h>
-
 int main() {
-    printf("Hello from SSCC!\n");
+    printf("Hello from SSCC!
+");
     return 0;
 }
 ```
 
-Compile and run:
-```bash
-./build/sscc/sscc -o hello hello.c
-./hello
-```
-
-**Output:**
-```
-Hello from SSCC!
-```
-
-#### Mathematical Example with GMP
-
+**Big Integer Math with GMP:**
 ```c
 #include <stdio.h>
 #include <gmp.h>
 
 int main() {
-    mpz_t big_number;
-    mpz_init(big_number);
+    mpz_t result;
+    mpz_init(result);
     
-    // Calculate 2^100
-    mpz_ui_pow_ui(big_number, 2, 100);
+    // Calculate 2^1000
+    mpz_ui_pow_ui(result, 2, 1000);
     
-    printf("2^100 = ");
-    mpz_out_str(stdout, 10, big_number);
-    printf("\n");
+    printf("2^1000 = ");
+    mpz_out_str(stdout, 10, result);
+    printf("
+");
     
-    mpz_clear(big_number);
+    mpz_clear(result);
     return 0;
 }
 ```
 
-Compile and run:
+Compile: `./sscc --addon sscc-gmp.addon -o bigmath bigmath.c -lgmp`
+
+## 🛠 Building from Source
+
+### Prerequisites
 ```bash
-./build/sscc/sscc -o bigmath bigmath.c -lgmp
-./bigmath
+# Ubuntu/Debian
+sudo apt install build-essential wget autoconf automake libtool m4 texinfo liblzma-dev
+
+# Fedora/RHEL
+sudo dnf install gcc make wget autoconf automake libtool m4 texinfo xz-devel
+
+# Optional: for binary compression
+sudo apt install upx  # or: sudo dnf install upx
 ```
 
-**Note:** When using GMP functions, you must include the `-lgmp` flag to link with the GMP library. All binaries are statically linked by default for maximum portability.
+### Build Options
 
-### Current Status
-
-- ✅ Self-contained C compiler
-- ✅ Static linking by default for portability  
-- ✅ Integrated musl libc and GMP libraries
-- ✅ Modular addon system
-- ✅ Auto-discovery of addon files
-- ✅ Complete development environment available
-- ✅ Cross-distribution compatibility
-
-## Building
-
-### With Nix (Recommended)
-
-The project includes a complete Nix development environment with all necessary dependencies:
-
+**Option 1: Automated Build (Recommended)**
 ```bash
-# Enter the development shell
-nix-shell
-
-# Build the project
-make
-
-# The shell provides:
-# - GCC, Make, autotools
-# - All required build dependencies (m4, texinfo, flex, bison, etc.)
-# - Optimized build environment
-# - Automatic PATH and environment setup
+./build_dist.sh
 ```
 
-### Traditional Build
-
-Requirements:
-- GCC compiler
-- Make
-- wget or curl
-- autotools (autoconf, automake, libtool)
-- Standard build tools: m4, texinfo, flex, bison
-- Optional: upx (for binary compression)
-
+**Option 2: Step-by-Step Build**
 ```bash
-make
+# Download dependencies
+make deps
+
+# Build individual components
+make musl        # Build musl libc
+make gmp         # Build GMP library  
+make tcc         # Build TCC compiler
+make sscc        # Create SSCC wrapper
+make addons      # Create addon packages
+
+# Create distribution
+make floppy      # Portable package
+make dist        # Compressed archives
 ```
 
-This will:
-1. Download TCC, musl, and GMP source code
-2. Build musl with static library support
-3. Build GMP with static library support  
-4. Build TCC with musl and GMP integration
-5. Create a self-contained SSCC binary in `build/sscc/`
-6. Generate addon files for modular deployment
-
-## Installation
-
+**Option 3: With Nix (Reproducible)**
 ```bash
-make install PREFIX=/usr/local
+nix-shell        # Enter development environment
+make             # Build with all dependencies available
 ```
 
-Or simply copy the `build/sscc/` directory to your desired location.
+### Build Targets
+- `make` or `make all` - Build everything
+- `make sscc` - Build core SSCC binary
+- `make addons` - Create addon packages
+- `make test` - Test the built compiler
+- `make floppy` - Create portable package
+- `make dist` - Create distribution archives
+- `make diskette` - Create 1.44MB floppy disk image
+- `make clean` - Clean build artifacts
+- `make distclean` - Clean everything including downloads
 
-## Development
+## 📦 Distribution Packages
 
-### Development Environment
+After building, you'll find:
 
-For development, use the Nix shell which provides a complete, reproducible build environment:
-
-```bash
-# Enter development shell
-nix-shell
-
-# The shell automatically sets up:
-# - All build dependencies
-# - Optimized compiler flags  
-# - Proper environment variables
-# - Development tools
+```
+dist/sscc-1.1.0/
+├── sscc                    # Self-contained executable (core + TCC embedded)
+├── sscc.bin               # Reference TCC binary (optional)
+├── sscc-libextra.addon    # Extended libraries addon
+└── sscc-gmp.addon         # GMP math library addon
 ```
 
-### Testing
+**Archive formats:**
+- `sscc-1.1.0-linux-x86_64.tar.gz` - Standard tarball
+- `sscc-1.1.0-linux-x86_64.tar.xz` - Smaller xz-compressed
+- `sscc-1.1.0-diskette.img` - 1.44MB floppy disk image
 
-```bash
-# Build and test
-make test
+## 🎯 Architecture
 
-# Clean build artifacts
-make clean
-
-# Clean everything including downloads
-make distclean
+### Self-Contained Design
 ```
-
-### Troubleshooting
-
-**Build Issues:**
-- Ensure all dependencies are installed (use `nix-shell` for guaranteed environment)
-- Check that you have sufficient disk space (~500MB for build)
-- Verify internet connection for source downloads
-
-**Runtime Issues:**
-- All binaries are statically linked by default for maximum portability
-- Include `#include <stdio.h>` for printf and other standard functions
-- GMP functions require `#include <gmp.h>` AND `-lgmp` linking flag
-- For undefined GMP symbols, ensure you're using `-lgmp` when compiling
-
-**Packaging Issues:**
-- Verify UPX is available for binary compression
-- Check that the test script runs successfully with `make test-package`
-
-## Creating Portable Packages
-
-To create a distributable package:
-
-```bash
-# Create portable package
-make package
-
-# Create compressed distribution archives
-make dist
+┌─────────────────────────────────────┐
+│             sscc (main)             │
+│  ┌─────────────┐ ┌─────────────────┐ │
+│  │ Embedded    │ │ Embedded Core   │ │
+│  │ TCC Binary  │ │ Resources       │ │
+│  │             │ │ • Headers       │ │
+│  │             │ │ • Libraries     │ │
+│  └─────────────┘ └─────────────────┘ │
+└─────────────────────────────────────┘
+           │
+           ▼
+┌─────────────────────────────────────┐
+│         Runtime Process             │
+│  1. Extract TCC to /tmp/sscc_XXX/   │
+│  2. Extract core headers/libs       │
+│  3. Load available .addon files     │
+│  4. Execute TCC with proper paths   │
+└─────────────────────────────────────┘
 ```
-
-This creates:
-- `dist/sscc-VERSION/` - Portable directory that can be copied anywhere
-- `dist/sscc-VERSION-linux-x86_64.tar.gz` - Gzipped tarball for distribution
-- `dist/sscc-VERSION-linux-x86_64.tar.xz` - Xz-compressed tarball (smaller)
-
-The portable package is self-contained and works on any Linux system without dependencies.
-
-### Testing on Another System
-
-```bash
-# Extract and test the package
-tar -xzf sscc-VERSION-linux-x86_64.tar.gz
-cd sscc-VERSION/
-
-# Use the compiler
-./sscc -o hello hello.c
-```
-
-## Architecture
-
-SSCC consists of several key components:
-
-### Core Components
-
-- **`sscc`** - Main wrapper that handles addon loading and compilation setup
-- **`sscc.bin`** - The TCC compiler binary (statically linked)
-- **Core resources** - Essential C standard library headers and libraries
-- **Addon system** - Modular extension mechanism for optional functionality
 
 ### Addon System
+- **Auto-discovery**: Scans for `*.addon` files in current directory
+- **Explicit loading**: `--addon filename.addon`
+- **Compressed**: Uses LZMA compression for small file sizes
+- **Modular**: Only load what you need
 
-The addon system allows optional functionality to be loaded as needed:
+## 🧪 Testing
 
-- **Auto-discovery**: Automatically loads `*.addon` files in current directory
-- **Explicit loading**: Use `--addon filename.addon` for specific requirements
-- **Modular**: Only include functionality you need
+```bash
+# Basic functionality test
+make test
+
+# Test portable package
+make test-package
+
+# Manual testing
+echo 'int main(){return 42;}' | ./sscc -o test -
+echo $?  # Should output: 42
+```
+
+## 📊 Size Comparison
+
+| Component | Size | Description |
+|-----------|------|-------------|
+| sscc (self-contained) | ~400KB | Complete compiler with embedded TCC + core |
+| sscc-libextra.addon | ~200KB | Extended POSIX libraries |
+| sscc-gmp.addon | ~300KB | GMP math library |
+| **Total Core** | **~400KB** | **Ready-to-use C compiler** |
+| **With All Addons** | **~900KB** | **Full-featured development environment** |
+
+*Compare to GCC: ~100MB+ with dependencies*
+
+## 🔧 Troubleshooting
+
+### Build Issues
+```bash
+# Check dependencies
+./build_dist.sh  # Will check and report missing deps
+
+# Clean build
+make distclean && make
+
+# Debug build failure
+make V=1  # Verbose output
+```
+
+### Runtime Issues
+```bash
+# Check compiler
+./sscc --help
+
+# Test basic functionality  
+echo 'int main(){return 0;}' | ./sscc -o test -
+
+# Check addon loading
+./sscc --list-addons
+```
+
+### Common Problems
+
+**"No such file or directory" when running compiled programs:**
+- SSCC uses static linking by default - binaries should be portable
+- Check that compilation completed successfully
+
+**"undefined reference" errors:**
+- Include required libraries: `-lm` for math, `-lgmp` for GMP
+- Load appropriate addon: `--addon sscc-gmp.addon` for GMP functions
+
+**Build failures:**
+- Ensure all dependencies are installed
+- Use `nix-shell` for guaranteed reproducible environment
+- Check available disk space (need ~500MB for full build)
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch: `git checkout -b feature-name`
+3. Make changes and test: `make test`
+4. Commit: `git commit -am 'Add feature'`
+5. Push: `git push origin feature-name`
+6. Create Pull Request
+
+### Development Environment
+```bash
+# Enter development shell with all dependencies
+nix-shell
+
+# Or use Docker
+docker run -v $(pwd):/src -w /src ubuntu:22.04 bash
+apt update && apt install -y build-essential wget autoconf automake libtool m4 texinfo liblzma-dev
+```
+
+## 📄 License
+
+SSCC itself is released under the MIT License. It incorporates:
+- **TCC**: LGPL v2.1
+- **musl**: MIT License  
+- **GMP**: LGPL v3
+
+See individual component licenses for details.
+
+## 🔗 Links
+
+- [TCC Official Site](https://bellard.org/tcc/)
+- [musl libc](https://musl.libc.org/)
+- [GMP Library](https://gmplib.org/)
+- [Release Downloads](https://github.com/DemwE/sscc/releases)
+
+---
+
+**Made with ❤️ for portable C development**

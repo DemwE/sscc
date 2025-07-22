@@ -1,5 +1,4 @@
-// Create addon files for modular deployment
-// Allows users to add additional libraries as needed
+// SSCC Addon Creator - Creates modular addon files for extended functionality
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -11,67 +10,18 @@
 
 #define MAX_PATH 4096
 
-typedef struct {
-    const char* name;
-    const char* description;
-    const char** include_patterns;
-    const char** lib_patterns;
-} addon_spec_t;
-
-// Include patterns for GMP addon
-const char* gmp_includes[] = {
-    "gmp.h", "gmpxx.h", NULL
+// Core files that should NOT be included in addons (already in core)
+const char* core_files[] = {
+    "stdio.h", "stdlib.h", "string.h", "stddef.h", "stdint.h", 
+    "stdarg.h", "stdbool.h", "math.h", "errno.h", "assert.h",
+    "features.h", "bits/alltypes.h", "bits/syscall.h", "bits/stdint.h",
+    "libc.a", "libm.a", "libtcc1.a",
+    NULL
 };
 
-const char* gmp_libs[] = {
-    "libgmp.a", "libgmpxx.a", NULL
-};
-
-// Include patterns for POSIX addon
-const char* posix_includes[] = {
-    "time.h", "signal.h", "sys/wait.h", "sys/ipc.h", "sys/shm.h", 
-    "sys/sem.h", "sys/msg.h", "pthread.h", "semaphore.h", 
-    "sys/socket.h", "netinet/", "arpa/", NULL
-};
-
-const char* posix_libs[] = {
-    "libpthread.a", "librt.a", "libdl.a", NULL
-};
-
-// Networking addon
-const char* network_includes[] = {
-    "netdb.h", "ifaddrs.h", "net/", "netinet/", "arpa/", NULL
-};
-
-const char* network_libs[] = {
-    "libresolv.a", NULL
-};
-
-addon_spec_t addons[] = {
-    {
-        .name = "gmp",
-        .description = "GNU Multiple Precision Arithmetic Library",
-        .include_patterns = gmp_includes,
-        .lib_patterns = gmp_libs
-    },
-    {
-        .name = "posix",
-        .description = "POSIX system calls and threading",
-        .include_patterns = posix_includes,
-        .lib_patterns = posix_libs
-    },
-    {
-        .name = "network",
-        .description = "Network programming libraries",
-        .include_patterns = network_includes,
-        .lib_patterns = network_libs
-    },
-    { NULL }
-};
-
-static int matches_pattern(const char* filename, const char** patterns) {
-    for (int i = 0; patterns[i]; i++) {
-        if (strstr(filename, patterns[i])) {
+static int is_core_file(const char* filename) {
+    for (int i = 0; core_files[i]; i++) {
+        if (strstr(filename, core_files[i])) {
             return 1;
         }
     }
@@ -108,24 +58,7 @@ static int lzma_compress_data(const char *input, size_t input_size, char **outpu
     return 0;
 }
 
-static int should_include_file(const char* path, const addon_spec_t* addon) {
-    const char* filename = strrchr(path, '/');
-    if (filename) filename++;
-    else filename = path;
-    
-    if (strstr(path, "include/")) {
-        return matches_pattern(filename, addon->include_patterns);
-    }
-    
-    if (strstr(path, "lib/")) {
-        return matches_pattern(filename, addon->lib_patterns);
-    }
-    
-    return 0;
-}
-
-static void scan_directory(const char* dir_path, const char* prefix, FILE* archive, 
-                          uint32_t* file_count, const addon_spec_t* addon) {
+static void scan_and_add_files(const char* dir_path, const char* prefix, FILE* addon, uint32_t* file_count) {
     DIR* dir = opendir(dir_path);
     if (!dir) return;
     
@@ -142,12 +75,15 @@ static void scan_directory(const char* dir_path, const char* prefix, FILE* archi
         if (S_ISDIR(st.st_mode)) {
             char new_prefix[MAX_PATH];
             snprintf(new_prefix, sizeof(new_prefix), "%s%s%s", prefix, strlen(prefix) ? "/" : "", entry->d_name);
-            scan_directory(full_path, new_prefix, archive, file_count, addon);
+            scan_and_add_files(full_path, new_prefix, addon, file_count);
         } else if (S_ISREG(st.st_mode)) {
             char rel_path[MAX_PATH];
             snprintf(rel_path, sizeof(rel_path), "%s%s%s", prefix, strlen(prefix) ? "/" : "", entry->d_name);
             
-            if (!should_include_file(rel_path, addon)) continue;
+            // Skip core files
+            if (is_core_file(entry->d_name)) {
+                continue;
+            }
             
             FILE* f = fopen(full_path, "rb");
             if (!f) continue;
@@ -156,13 +92,22 @@ static void scan_directory(const char* dir_path, const char* prefix, FILE* archi
             long file_size = ftell(f);
             fseek(f, 0, SEEK_SET);
             
+            if (file_size > 2*1024*1024) { // Skip files larger than 2MB
+                fclose(f);
+                continue;
+            }
+            
             char* file_data = malloc(file_size);
             if (!file_data) {
                 fclose(f);
                 continue;
             }
             
-            fread(file_data, 1, file_size, f);
+            if (fread(file_data, 1, file_size, f) != file_size) {
+                fclose(f);
+                free(file_data);
+                continue;
+            }
             fclose(f);
             
             char* compressed_data;
@@ -172,15 +117,15 @@ static void scan_directory(const char* dir_path, const char* prefix, FILE* archi
                 uint32_t original_size = file_size;
                 uint32_t comp_size = compressed_size;
                 
-                fwrite(&path_len, sizeof(uint32_t), 1, archive);
-                fwrite(rel_path, 1, path_len, archive);
-                fwrite(&original_size, sizeof(uint32_t), 1, archive);
-                fwrite(&comp_size, sizeof(uint32_t), 1, archive);
-                fwrite(compressed_data, 1, compressed_size, archive);
+                fwrite(&path_len, sizeof(uint32_t), 1, addon);
+                fwrite(rel_path, 1, path_len, addon);
+                fwrite(&original_size, sizeof(uint32_t), 1, addon);
+                fwrite(&comp_size, sizeof(uint32_t), 1, addon);
+                fwrite(compressed_data, 1, compressed_size, addon);
                 
                 (*file_count)++;
                 printf("  %s (%ld -> %zu bytes, %.1f%%)\n", 
-                       rel_path, file_size, compressed_size,
+                       rel_path, file_size, compressed_size, 
                        (float)compressed_size / file_size * 100);
                 
                 free(compressed_data);
@@ -192,113 +137,67 @@ static void scan_directory(const char* dir_path, const char* prefix, FILE* archi
 }
 
 int main(int argc, char* argv[]) {
-    if (argc < 3) {
-        printf("Usage: %s <include_dir> <lib_dir> [addon_name]\n\n", argv[0]);
-        printf("Available addons:\n");
-        for (int i = 0; addons[i].name; i++) {
-            printf("  %-10s - %s\n", addons[i].name, addons[i].description);
-        }
+    if (argc != 6) {
+        fprintf(stderr, "Usage: %s <addon_name> <description> <include_dir> <lib_dir> <output.addon>\n", argv[0]);
+        fprintf(stderr, "Example: %s libextra \"Extended musl libraries\" include lib sscc-libextra.addon\n", argv[0]);
         return 1;
     }
     
-    const char* include_dir = argv[1];
-    const char* lib_dir = argv[2];
-    const char* addon_name = argc > 3 ? argv[3] : "all";
+    const char* addon_name = argv[1];
+    const char* description = argv[2];
+    const char* include_dir = argv[3];
+    const char* lib_dir = argv[4];
+    const char* output_file = argv[5];
     
-    // Find addon
-    addon_spec_t* target_addon = NULL;
-    if (strcmp(addon_name, "all") != 0) {
-        for (int i = 0; addons[i].name; i++) {
-            if (strcmp(addons[i].name, addon_name) == 0) {
-                target_addon = &addons[i];
-                break;
-            }
-        }
-        if (!target_addon) {
-            printf("Unknown addon: %s\n", addon_name);
-            return 1;
-        }
+    FILE* addon = fopen(output_file, "wb");
+    if (!addon) {
+        perror("Cannot create addon file");
+        return 1;
     }
     
-    if (target_addon) {
-        // Create single addon
-        char output_file[256];
-        snprintf(output_file, sizeof(output_file), "sscc-%s.addon", target_addon->name);
-        
-        FILE* archive = fopen(output_file, "wb");
-        if (!archive) {
-            perror("Cannot create addon file");
-            return 1;
-        }
-        
-        // Write magic and metadata
-        fwrite("ADDON", 5, 1, archive);
-        uint32_t name_len = strlen(target_addon->name);
-        fwrite(&name_len, sizeof(uint32_t), 1, archive);
-        fwrite(target_addon->name, 1, name_len, archive);
-        
-        uint32_t desc_len = strlen(target_addon->description);
-        fwrite(&desc_len, sizeof(uint32_t), 1, archive);
-        fwrite(target_addon->description, 1, desc_len, archive);
-        
-        // Placeholder for file count
-        long count_pos = ftell(archive);
-        uint32_t file_count = 0;
-        fwrite(&file_count, sizeof(uint32_t), 1, archive);
-        
-        printf("Creating %s addon...\n", target_addon->name);
-        
-        scan_directory(include_dir, "include", archive, &file_count, target_addon);
-        scan_directory(lib_dir, "lib", archive, &file_count, target_addon);
-        
-        // Write actual file count
-        fseek(archive, count_pos, SEEK_SET);
-        fwrite(&file_count, sizeof(uint32_t), 1, archive);
-        
-        fclose(archive);
-        
-        struct stat st;
-        stat(output_file, &st);
-        printf("Created %s: %u files, %ld bytes\n", output_file, file_count, st.st_size);
-    } else {
-        // Create all addons
-        printf("Creating all addon files...\n\n");
-        for (int i = 0; addons[i].name; i++) {
-            char output_file[256];
-            snprintf(output_file, sizeof(output_file), "sscc-%s.addon", addons[i].name);
-            
-            FILE* archive = fopen(output_file, "wb");
-            if (!archive) continue;
-            
-            // Write magic and metadata
-            fwrite("ADDON", 5, 1, archive);
-            uint32_t name_len = strlen(addons[i].name);
-            fwrite(&name_len, sizeof(uint32_t), 1, archive);
-            fwrite(addons[i].name, 1, name_len, archive);
-            
-            uint32_t desc_len = strlen(addons[i].description);
-            fwrite(&desc_len, sizeof(uint32_t), 1, archive);
-            fwrite(addons[i].description, 1, desc_len, archive);
-            
-            long count_pos = ftell(archive);
-            uint32_t file_count = 0;
-            fwrite(&file_count, sizeof(uint32_t), 1, archive);
-            
-            printf("%s addon:\n", addons[i].name);
-            
-            scan_directory(include_dir, "include", archive, &file_count, &addons[i]);
-            scan_directory(lib_dir, "lib", archive, &file_count, &addons[i]);
-            
-            fseek(archive, count_pos, SEEK_SET);
-            fwrite(&file_count, sizeof(uint32_t), 1, archive);
-            
-            fclose(archive);
-            
-            struct stat st;
-            stat(output_file, &st);
-            printf("  -> %s: %u files, %ld bytes\n\n", output_file, file_count, st.st_size);
-        }
+    printf("Creating addon: %s\n", addon_name);
+    printf("Description: %s\n", description);
+    
+    // Write magic
+    fwrite("ADDON", 5, 1, addon);
+    
+    // Write addon name
+    uint32_t name_len = strlen(addon_name);
+    fwrite(&name_len, sizeof(uint32_t), 1, addon);
+    fwrite(addon_name, 1, name_len, addon);
+    
+    // Write description
+    uint32_t desc_len = strlen(description);
+    fwrite(&desc_len, sizeof(uint32_t), 1, addon);
+    fwrite(description, 1, desc_len, addon);
+    
+    // Placeholder for file count
+    long count_pos = ftell(addon);
+    uint32_t file_count = 0;
+    fwrite(&file_count, sizeof(uint32_t), 1, addon);
+    
+    // Add files from include directory
+    if (access(include_dir, F_OK) == 0) {
+        printf("Adding headers from %s:\n", include_dir);
+        scan_and_add_files(include_dir, "include", addon, &file_count);
     }
+    
+    // Add files from lib directory
+    if (access(lib_dir, F_OK) == 0) {
+        printf("Adding libraries from %s:\n", lib_dir);
+        scan_and_add_files(lib_dir, "lib", addon, &file_count);
+    }
+    
+    // Write actual file count
+    fseek(addon, count_pos, SEEK_SET);
+    fwrite(&file_count, sizeof(uint32_t), 1, addon);
+    
+    fclose(addon);
+    
+    struct stat st;
+    stat(output_file, &st);
+    printf("\nAddon created: %u files, %ld bytes\n", file_count, st.st_size);
+    printf("File: %s\n", output_file);
     
     return 0;
 }

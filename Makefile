@@ -108,12 +108,12 @@ sscc: tcc
 		echo "Ultra-compressed TCC: $$(du -h $(BUILD_DIR)/sscc/sscc.bin | cut -f1)"; \
 	fi
 	
-	# Prepare minimal core resources (essential C library only)
+	# Prepare minimal core resources (absolute essentials only!)
 	@echo "Preparing minimal core resources..."
 	# Essential TCC runtime only
 	cp $(TCC_DIR)/libtcc1.a $(BUILD_DIR)/sscc/temp_lib/
-	# Essential musl headers and core libraries
-	mkdir -p $(BUILD_DIR)/sscc/temp_include/sys $(BUILD_DIR)/sscc/temp_include/bits
+	# Minimal musl headers - only what's needed for basic compilation
+	mkdir -p $(BUILD_DIR)/sscc/temp_include/bits
 	cp $(BUILD_DIR)/musl/include/stdio.h $(BUILD_DIR)/sscc/temp_include/
 	cp $(BUILD_DIR)/musl/include/stdlib.h $(BUILD_DIR)/sscc/temp_include/
 	cp $(BUILD_DIR)/musl/include/string.h $(BUILD_DIR)/sscc/temp_include/
@@ -124,12 +124,10 @@ sscc: tcc
 	cp $(BUILD_DIR)/musl/include/math.h $(BUILD_DIR)/sscc/temp_include/
 	cp $(BUILD_DIR)/musl/include/errno.h $(BUILD_DIR)/sscc/temp_include/
 	cp $(BUILD_DIR)/musl/include/assert.h $(BUILD_DIR)/sscc/temp_include/
-	cp $(BUILD_DIR)/musl/include/unistd.h $(BUILD_DIR)/sscc/temp_include/
-	cp $(BUILD_DIR)/musl/include/fcntl.h $(BUILD_DIR)/sscc/temp_include/
 	cp $(BUILD_DIR)/musl/include/features.h $(BUILD_DIR)/sscc/temp_include/
-	cp $(BUILD_DIR)/musl/include/sys/types.h $(BUILD_DIR)/sscc/temp_include/sys/
-	cp $(BUILD_DIR)/musl/include/sys/stat.h $(BUILD_DIR)/sscc/temp_include/sys/
-	cp $(BUILD_DIR)/musl/include/bits/alltypes.h $(BUILD_DIR)/sscc/temp_include/bits/
+	cp $(MUSL_DIR)/obj/include/bits/alltypes.h $(BUILD_DIR)/sscc/temp_include/bits/
+	cp $(MUSL_DIR)/obj/include/bits/syscall.h $(BUILD_DIR)/sscc/temp_include/bits/
+	-cp $(MUSL_DIR)/obj/include/bits/stdint.h $(BUILD_DIR)/sscc/temp_include/bits/ 2>/dev/null || true
 	# Core libraries only
 	cp $(BUILD_DIR)/musl/lib/libc.a $(BUILD_DIR)/sscc/temp_lib/
 	cp $(BUILD_DIR)/musl/lib/libm.a $(BUILD_DIR)/sscc/temp_lib/
@@ -148,9 +146,12 @@ sscc: tcc
 	# Convert to C source
 	$(BUILD_DIR)/sscc/bin2c $(BUILD_DIR)/sscc/core.bin $(BUILD_DIR)/sscc/core.c
 	
-	# Build modular SSCC wrapper
-	@echo "Building modular SSCC wrapper..."
-	gcc -O2 -static -o $(BUILD_DIR)/sscc/sscc src/sscc.c $(BUILD_DIR)/sscc/core.c -llzma
+	# Convert TCC binary to C source
+	$(BUILD_DIR)/sscc/bin2c $(BUILD_DIR)/sscc/sscc.bin $(BUILD_DIR)/sscc/tcc_binary.c
+	
+	# Build modular SSCC wrapper with embedded TCC binary
+	@echo "Building self-contained SSCC wrapper..."
+	gcc -O2 -o build/sscc/sscc src/sscc.c build/sscc/core.c build/sscc/tcc_binary.c -llzma
 	
 	# Ultra-aggressive compression on final binary
 	@if command -v upx >/dev/null 2>&1; then \
@@ -159,24 +160,40 @@ sscc: tcc
 	
 	# Clean up temporary files
 	rm -rf $(BUILD_DIR)/sscc/temp_include $(BUILD_DIR)/sscc/temp_lib
-	rm -f $(BUILD_DIR)/sscc/embed_resources $(BUILD_DIR)/sscc/bin2c $(BUILD_DIR)/sscc/core.bin $(BUILD_DIR)/sscc/core.c
+	rm -f $(BUILD_DIR)/sscc/embed_resources $(BUILD_DIR)/sscc/bin2c $(BUILD_DIR)/sscc/core.bin $(BUILD_DIR)/sscc/core.c $(BUILD_DIR)/sscc/tcc_binary.c
+	# Keep sscc.bin for reference but it's now embedded in sscc
 	
 	@echo "✅ SSCC built successfully!"
-	@echo "Main binary: $(BUILD_DIR)/sscc/sscc ($$(du -h $(BUILD_DIR)/sscc/sscc | cut -f1))"
-	@echo "TCC binary: $(BUILD_DIR)/sscc/sscc.bin ($$(du -h $(BUILD_DIR)/sscc/sscc.bin | cut -f1))"
-	@echo "Total core: $$(du -sh $(BUILD_DIR)/sscc | cut -f1)"
+	@echo "Self-contained binary: $(BUILD_DIR)/sscc/sscc ($$(du -h $(BUILD_DIR)/sscc/sscc | cut -f1))"
+	@echo "Reference TCC binary: $(BUILD_DIR)/sscc/sscc.bin ($$(du -h $(BUILD_DIR)/sscc/sscc.bin | cut -f1))"
+	@echo "Total package: $$(du -sh $(BUILD_DIR)/sscc | cut -f1)"
 	@echo ""
 	@echo "✅ Ready for deployment! Modular addon system active."
 
 # Create addon files for modular deployment
 addons: sscc
 	@echo "Creating addon files..."
-	@if [ ! -f src/create_addon.c ]; then \
-		echo "Warning: create_addon.c not found, skipping addon creation"; \
-	else \
-		gcc -O2 -o $(BUILD_DIR)/sscc/create_addon src/create_addon.c -llzma; \
-		echo "✅ Addon creator built"; \
-	fi
+	gcc -O2 -o $(BUILD_DIR)/sscc/create_addon src/create_addon.c -llzma
+	@echo "✅ Addon creator built"
+	@echo ""
+	@echo "Creating libextra addon with all additional musl libraries..."
+	cd $(BUILD_DIR)/sscc && ./create_addon libextra \
+		"Extended musl libraries - full POSIX functionality" \
+		../../build/musl/include \
+		../../build/musl/lib \
+		sscc-libextra.addon
+	@echo ""
+	@echo "Creating GMP addon..."
+	cd $(BUILD_DIR)/sscc && ./create_addon gmp \
+		"GNU Multiple Precision Arithmetic Library" \
+		../../build/gmp/include \
+		../../build/gmp/lib \
+		sscc-gmp.addon
+	@echo ""
+	# Clean up the create_addon utility for release
+	rm -f $(BUILD_DIR)/sscc/create_addon
+	@echo "✅ Addon files created successfully!"
+	@ls -lh $(BUILD_DIR)/sscc/*.addon 2>/dev/null || echo "No addon files found"
 
 # Test the built SSCC
 test: sscc
@@ -207,7 +224,12 @@ distclean: clean
 help:
 	@echo "SSCC Build System"
 	@echo "===================="
-	@echo "Targets:"
+	@echo "Quick Start:"
+	@echo "  ./build_dist.sh   - Automated build with all features"
+	@echo "  ./test_sscc.sh    - Comprehensive test suite"
+	@echo "  ./cleanup.sh      - Clean up project files"
+	@echo ""
+	@echo "Build Targets:"
 	@echo "  all       - Build SSCC with addon support (default)"
 	@echo "  deps      - Download dependencies"
 	@echo "  musl      - Build musl library"
@@ -215,15 +237,24 @@ help:
 	@echo "  tcc       - Build TCC compiler"
 	@echo "  sscc      - Create SSCC binary with minimal core"
 	@echo "  addons    - Create addon files for modular deployment"
+	@echo "  test      - Test the built compiler"
+	@echo ""
+	@echo "Package Targets:"
 	@echo "  floppy    - Create complete floppy package"
-	@echo "  test      - Test the floppy package"
 	@echo "  package   - Create portable package (alias for floppy)"
 	@echo "  dist      - Create distribution archives"
+	@echo "  diskette  - Create 1.44MB floppy disk image"
+	@echo ""
+	@echo "Maintenance:"
 	@echo "  install   - Install SSCC to system"
 	@echo "  clean     - Clean build artifacts"
-	@echo "  distclean - Clean everything"
+	@echo "  distclean - Clean everything including downloads"
 	@echo "  help      - Show this help"
 	@echo ""
+	@echo "Usage Examples:"
+	@echo "  make && make test                    # Build and test"
+	@echo "  make floppy                         # Create portable package"
+	@echo "  ./build/sscc/sscc -o hello hello.c  # Use compiler"
 
 
 package: floppy
@@ -281,5 +312,7 @@ floppy: sscc addons
 	@echo "Creating complete floppy package..."
 	@mkdir -p dist/sscc-$(VERSION)
 	@cp -r $(BUILD_DIR)/sscc/* dist/sscc-$(VERSION)/
+	# Optional: Remove sscc.bin since it's now embedded in sscc
+	# rm -f dist/sscc-$(VERSION)/sscc.bin
 	@echo "✅ Floppy package created in dist/sscc-$(VERSION)/"
 	@echo "Package size: $$(du -sh dist/sscc-$(VERSION) | cut -f1)"

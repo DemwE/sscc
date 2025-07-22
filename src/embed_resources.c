@@ -11,12 +11,11 @@
 
 #define MAX_PATH 4096
 
-// Essential files for basic C compilation only
+// Absolute minimum for basic C compilation (floppy disk core)
 const char* core_includes[] = {
     "stdio.h", "stdlib.h", "string.h", "stddef.h", "stdint.h", 
     "stdarg.h", "stdbool.h", "math.h", "errno.h", "assert.h",
-    "unistd.h", "fcntl.h", "features.h", 
-    "sys/types.h", "sys/stat.h", "bits/alltypes.h",
+    "features.h", "bits/alltypes.h", "bits/syscall.h", "bits/stdint.h",
     NULL
 };
 
@@ -70,10 +69,9 @@ static int lzma_compress_data(const char *input, size_t input_size, char **outpu
 
 static int should_include_file(const char* path) {
     if (strstr(path, "include/")) {
-        const char* filename = strrchr(path, '/');
-        if (filename) filename++;
-        else filename = path;
-        return is_core_file(filename, core_includes);
+        // Extract the relative path from include/ onward
+        const char* include_path = strstr(path, "include/") + 8; // Skip "include/"
+        return is_core_file(include_path, core_includes);
     }
     
     if (strstr(path, "lib/")) {

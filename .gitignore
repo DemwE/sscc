@@ -8,14 +8,23 @@ tcc/
 musl/
 gmp/
 
-# Compiled binaries
+# Compiled binaries and objects
 *.o
 *.a
 *.so
 *.exe
+*.out
 
-# Test files
+# Test files and programs
 test_results/
+test_core
+test_core.c
+test_addon
+test_addon.c
+comprehensive_test
+comprehensive_test.c
+simple
+simple.c
 hello
 hello.c
 musl_test
@@ -25,6 +34,9 @@ gmp_test.c
 simple_test
 simple_test.c
 test.c
+
+# Addon files (should be in build/ directory)
+*.addon
 
 # Temporary files
 *.tmp
@@ -47,6 +59,11 @@ Thumbs.db
 *~
 .vscode/
 .idea/
+*.kate-swp
+
+# Development tools
+.ccls-cache/
+compile_commands.json
 
 # Nix
 result
@@ -54,3 +71,21 @@ result-*
 
 # direnv
 .direnv/
+
+# Backup files
+*.bak
+*.backup
+*.orig
+
+# Archives
+*.tar
+*.tar.gz
+*.tar.xz
+*.tar.bz2
+*.zip
+
+# Debug files
+*.dSYM/
+*.su
+*.idb
+*.pdb
