@@ -214,29 +214,9 @@ static int load_addon_file(const char *addon_path, const char *temp_dir) {
 }
 
 static void load_addons(const char *temp_dir, char **addon_files, int addon_count) {
-    // Load explicitly specified addon files
+    // Load explicitly specified addon files only
     for (int i = 0; i < addon_count; i++) {
         load_addon_file(addon_files[i], temp_dir);
-    }
-    
-    // Auto-discover addon files in current directory
-    glob_t glob_result;
-    if (glob("sscc-*.addon", GLOB_NOSORT, NULL, &glob_result) == 0) {
-        for (size_t i = 0; i < glob_result.gl_pathc; i++) {
-            // Check if this addon was already loaded explicitly
-            int already_loaded = 0;
-            for (int j = 0; j < addon_count; j++) {
-                if (strcmp(glob_result.gl_pathv[i], addon_files[j]) == 0) {
-                    already_loaded = 1;
-                    break;
-                }
-            }
-            
-            if (!already_loaded) {
-                load_addon_file(glob_result.gl_pathv[i], temp_dir);
-            }
-        }
-        globfree(&glob_result);
     }
 }
 
@@ -332,7 +312,7 @@ int main(int argc, char *argv[]) {
     fclose(tcc_file);
     chmod(tcc_path, 0755); // Make executable
     
-    // Load addons (always attempt auto-discovery)
+    // Load addons (only explicitly specified ones)
     load_addons(temp_dir, addon_files, addon_count);
     
     // TCC binary is now extracted to temp directory
