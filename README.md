@@ -52,11 +52,24 @@ $ ./sscc hello.c -o hello
 Created memory filesystem using memfd_create: /tmp/sscc_memfd_12345
 SSCC - Modular C Compiler
 Extracting core: 15 files...
+Extracting: include/assert.h -> memfd (428 bytes)
+Extracting: include/stdlib.h -> memfd (4.76 KB)
+Extracting: include/stddef.h -> memfd (547 bytes)
+Extracting: include/stdbool.h -> memfd (167 bytes)
+Extracting: include/stdint.h -> memfd (2.52 KB)
 Extracting: include/stdio.h -> memfd (5.73 KB)
-Extracting: lib/libc.a -> memfd (48.14 KB)
-[... extraction details ...]
+Extracting: include/math.h -> memfd (11.22 KB)
+Extracting: include/features.h -> memfd (865 bytes)
+Extracting: include/bits/syscall.h -> memfd (20.30 KB)
+Extracting: include/bits/alltypes.h -> memfd (11.18 KB)
+Extracting: include/stdarg.h -> memfd (351 bytes)
+Extracting: include/errno.h -> memfd (369 bytes)
+Extracting: include/string.h -> memfd (2.94 KB)
+Extracting: lib/libtcc1.a -> memfd (48.14 KB)
+Extracting: lib/libm.a -> memfd (8 bytes)
+Extracting: tcc -> /tmp/sscc_memfd_12345/tcc (373.72 KB)
+Libs cached size: 483.17 KB (memfd)
 Starting compilation...
-Total RAM used: 483.17 KB (memfd)
 
 $ ./hello
 Hello from SSCC!

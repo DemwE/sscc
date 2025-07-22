@@ -529,19 +529,6 @@ static void load_addons(const char *temp_dir, char **addon_files, int addon_coun
 
 static void cleanup_temp_dir(const char *temp_dir) {
     if (use_ram_filesystem) {
-        // Show final RAM usage summary
-        char total_str[64];
-        format_bytes(total_ram_used, total_str, sizeof(total_str));
-        
-        const char* method_name = "";
-        switch (ram_method) {
-            case 1: method_name = " (memfd)"; break;
-            case 2: method_name = " (/dev/shm)"; break;
-            case 3: method_name = " (tmpfs)"; break;
-            case 4: method_name = " (disk)"; break;
-        }
-        printf("Total RAM used: %s%s\n", total_str, method_name);
-        
         // Cleanup memfd files
         cleanup_memfd_files();
         
@@ -651,6 +638,21 @@ int main(int argc, char *argv[]) {
     
     // Load addons (only explicitly specified ones)
     load_addons(temp_dir, addon_files, addon_count);
+    
+    // Show total RAM usage before compilation
+    if (use_ram_filesystem) {
+        char total_str[64];
+        format_bytes(total_ram_used, total_str, sizeof(total_str));
+        
+        const char* method_name = "";
+        switch (ram_method) {
+            case 1: method_name = " (memfd)"; break;
+            case 2: method_name = " (/dev/shm)"; break;
+            case 3: method_name = " (tmpfs)"; break;
+            case 4: method_name = " (disk)"; break;
+        }
+        printf("Libs cached size: %s%s\n", total_str, method_name);
+    }
     
     // TCC binary is now extracted to temp directory
     // (No need to look for external sscc.bin file)
