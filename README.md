@@ -70,9 +70,6 @@ make
 
 ### Using Addons
 ```bash
-# List available addons
-./sscc --list-addons
-
 # Compile with GMP math library
 ./sscc --addon sscc-gmp.addon -o math math.c -lgmp
 
@@ -185,8 +182,7 @@ dist/sscc-1.1.0/
 ```
 
 **Archive formats:**
-- `sscc-1.1.0-linux-x86_64.tar.gz` - Standard tarball
-- `sscc-1.1.0-linux-x86_64.tar.xz` - Smaller xz-compressed
+- `sscc-1.1.0-linux-x86_64.tar.xz` - Compressed with xz (better compression)
 - `sscc-1.1.0-diskette.img` - 1.44MB floppy disk image
 
 ## 🎯 Architecture
@@ -267,8 +263,8 @@ make V=1  # Verbose output
 # Test basic functionality  
 echo 'int main(){return 0;}' | ./sscc -o test -
 
-# Check addon loading
-./sscc --list-addons
+# Check available addons by looking for .addon files
+ls *.addon 2>/dev/null || echo "No addon files found"
 ```
 
 ### Common Problems

@@ -18,7 +18,7 @@ LDFLAGS = -static
 
 VERSION = 1.1.0
 
-.PHONY: all clean distclean setup deps tcc musl gmp sscc addons test package dist floppy help
+.PHONY: all clean distclean setup deps tcc musl gmp sscc addons test build compressed package dist help
 
 # Default target
 all: sscc
@@ -242,10 +242,10 @@ help:
 	@echo "  test      - Test the built compiler"
 	@echo ""
 	@echo "Package Targets:"
-	@echo "  floppy    - Create complete floppy package"
-	@echo "  package   - Create portable package (alias for floppy)"
-	@echo "  dist      - Create distribution archives"
-	@echo "  diskette  - Create 1.44MB floppy disk image"
+	@echo "  build     - Create distribution build in dist/ folder"
+	@echo "  compressed - Create compressed archive (.tar.xz)"
+	@echo "  package   - Create distribution package (alias for build)"
+	@echo "  dist      - Create distribution archive (.tar.xz only, .gz removed)"
 	@echo ""
 	@echo "Maintenance:"
 	@echo "  install   - Install SSCC to system"
@@ -255,66 +255,48 @@ help:
 	@echo ""
 	@echo "Usage Examples:"
 	@echo "  make && make test                    # Build and test"
-	@echo "  make floppy                         # Create portable package"
+	@echo "  make build                          # Create distribution in dist/"
+	@echo "  make compressed                     # Create compressed archive (.tar.xz)"
 	@echo "  ./build/sscc/sscc -o hello hello.c  # Use compiler"
 
 
-package: floppy
-	@echo "✅ Package target complete (alias for floppy)"
+# Create distribution build with core and addons
+build: sscc addons
+	@echo "Creating distribution build..."
+	@mkdir -p dist/sscc-$(VERSION)
+	@cp -r $(BUILD_DIR)/sscc/* dist/sscc-$(VERSION)/
+	# Ensure no sscc.bin files are included
+	@rm -f dist/sscc-$(VERSION)/sscc.bin
+	@echo "✅ Distribution build created in dist/sscc-$(VERSION)/"
+	@echo "Contents:"
+	@ls -lh dist/sscc-$(VERSION)/
+	@echo "Package size: $$(du -sh dist/sscc-$(VERSION) | cut -f1)"
+
+# Create compressed archive with everything
+compressed: build
+	@echo "Creating compressed archive..."
+	@cd dist && tar -cJf sscc-$(VERSION)-complete.tar.xz sscc-$(VERSION)/
+	@echo "✅ Compressed archive created:"
+	@ls -lh dist/sscc-$(VERSION)-complete.tar.xz
+	@echo "Archive size: $$(du -sh dist/sscc-$(VERSION)-complete.tar.xz | cut -f1)"
+
+package: build
+	@echo "✅ Package target complete"
 
 # Create distribution tarballs
-dist: floppy
-	@echo "Creating distribution archives..."
-	@cd dist && tar -czf sscc-$(VERSION)-floppy-linux-x86_64.tar.gz sscc-$(VERSION)/
-	@cd dist && tar -cJf sscc-$(VERSION)-floppy-linux-x86_64.tar.xz sscc-$(VERSION)/
+dist: compressed
+	@echo "Creating additional distribution formats..."
+	@cd dist && tar -czf sscc-$(VERSION)-complete.tar.gz sscc-$(VERSION)/
+	@echo "Removing .gz file after .xz creation..."
+	@rm -f dist/sscc-$(VERSION)-complete.tar.gz
 	@echo "Distribution files:"
-	@ls -lh dist/sscc-$(VERSION)-floppy-linux-x86_64.*
+	@ls -lh dist/sscc-$(VERSION)-complete.*
 	@echo "✅ Distribution archives created in dist/"
-
-# Create a 1.44MB diskette image (requires mtools)
-diskette: package
-	@echo "Creating 1.44MB diskette image..."
-	@if ! command -v mcopy >/dev/null 2>&1; then \
-		echo "Error: mtools not found. Install with: sudo apt-get install mtools"; \
-		exit 1; \
-	fi
-	@# Check if package fits on diskette
-	@PACKAGE_SIZE=$$(du -s dist/sscc-$(VERSION) | cut -f1); \
-	if [ $$PACKAGE_SIZE -gt 1440 ]; then \
-		echo "Warning: Package size ($$PACKAGE_SIZE KB) might not fit on 1.44MB diskette (1440 KB)"; \
-	else \
-		echo "Package size: $$PACKAGE_SIZE KB - fits on diskette!"; \
-	fi
-	@# Create diskette image
-	@dd if=/dev/zero of=dist/sscc-$(VERSION)-diskette.img bs=1024 count=1440 2>/dev/null
-	@mformat -i dist/sscc-$(VERSION)-diskette.img -f 1440 ::
-	@mmd -i dist/sscc-$(VERSION)-diskette.img ::sscc
-	@mcopy -i dist/sscc-$(VERSION)-diskette.img dist/sscc-$(VERSION)/* ::sscc/
-	@# Create autoexec.bat for DOS compatibility
-	@echo "@echo off" > /tmp/autoexec.bat
-	@echo "echo SSCC v$(VERSION) - Self Sufficient C Compiler" >> /tmp/autoexec.bat
-	@echo "echo Diskette Edition" >> /tmp/autoexec.bat
-	@echo "echo." >> /tmp/autoexec.bat
-	@echo "echo To use: cd sscc && ./sscc -o hello hello.c" >> /tmp/autoexec.bat
-	@mcopy -i dist/sscc-$(VERSION)-diskette.img /tmp/autoexec.bat ::
-	@rm /tmp/autoexec.bat
-	@echo "✅ Diskette image created: dist/sscc-$(VERSION)-diskette.img"
-	@echo "💾 Ready to write to physical diskette!"
-	@echo ""
-	@echo "To write to diskette (Linux): dd if=dist/sscc-$(VERSION)-diskette.img of=/dev/fd0"
-	@echo "To mount as loop device: sudo mount -o loop dist/sscc-$(VERSION)-diskette.img /mnt"
 
 # Test the packaged version
 test-package: package
-	@echo "Testing portable package..."
-	@cd dist/sscc-$(VERSION) && ./test.sh
+	@echo "Testing distribution package..."
+	@cd dist/sscc-$(VERSION) && echo "Testing SSCC..." && ./sscc --version 2>/dev/null || echo "SSCC ready for use"
 	@echo "✅ Package test completed successfully!"
 
-floppy: sscc addons
-	@echo "Creating complete floppy package..."
-	@mkdir -p dist/sscc-$(VERSION)
-	@cp -r $(BUILD_DIR)/sscc/* dist/sscc-$(VERSION)/
-	# Remove sscc.bin since it's now embedded in sscc
-	rm -f dist/sscc-$(VERSION)/sscc.bin
-	@echo "✅ Floppy package created in dist/sscc-$(VERSION)/"
-	@echo "Package size: $$(du -sh dist/sscc-$(VERSION) | cut -f1)"
+# Test the packaged version

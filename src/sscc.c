@@ -268,7 +268,6 @@ int main(int argc, char *argv[]) {
             printf("\n");
             printf("Modular options:\n");
             printf("  --addon FILE    Load addon file (.addon)\n");
-            printf("  --list-addons   List available addons in current directory\n");
             printf("\n");
             printf("Common options:\n");
             printf("  -o FILE         Output to FILE\n");
@@ -290,20 +289,6 @@ int main(int argc, char *argv[]) {
             printf("  • sscc-posix.addon    - POSIX system calls and threading\n");
             printf("  • sscc-network.addon  - Network programming support\n");
             printf("\n");
-            return 0;
-        } else if (strcmp(argv[i], "--list-addons") == 0) {
-            printf("Available addon files:\n");
-            glob_t glob_result;
-            if (glob("sscc-*.addon", GLOB_NOSORT, NULL, &glob_result) == 0) {
-                for (size_t j = 0; j < glob_result.gl_pathc; j++) {
-                    struct stat st;
-                    stat(glob_result.gl_pathv[j], &st);
-                    printf("  %-20s (%ld bytes)\n", glob_result.gl_pathv[j], st.st_size);
-                }
-                globfree(&glob_result);
-            } else {
-                printf("  No addon files found in current directory\n");
-            }
             return 0;
         } else if (strcmp(argv[i], "--addon") == 0 && i + 1 < argc) {
             addon_files[addon_count++] = argv[i + 1];
