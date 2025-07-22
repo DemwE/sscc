@@ -1,6 +1,6 @@
 # SSCC - Self Sufficient C Compiler
 
-A truly portable, self-contained C compiler based on TCC (Tiny C Compiler) with integrated runtime libraries and modular addon support. SSCC creates a single executable that contains everything needed to compile C programs.
+A truly portable, self-contained C compiler based on TCC (Tiny C Compiler) with integrated runtime libraries, advanced RAM filesystem support, and modular addon system. SSCC creates a single executable that contains everything needed to compile C programs with blazing-fast performance using pure memory storage.
 
 ## 🌟 Key Features
 
@@ -14,10 +14,19 @@ A truly portable, self-contained C compiler based on TCC (Tiny C Compiler) with 
 ## 📋 What's Included
 
 ### Core Components (Always Available)
-- **TCC v0.9.27** - Fast, lightweight C compiler
-- **musl v1.2.5** - Lightweight C standard library
+- **TCC v0.9.27** - Fast, lightweight C compiler with embedded binary
+- **musl v1.2.5** - Lightweight C standard library  
+- **RAM Filesystem** - Advanced memory storage with priority fallbacks
 - **Essential headers**: stdio.h, stdlib.h, string.h, math.h, etc.
 - **Core libraries**: libc.a, libm.a, libtcc1.a
+- **Memory Tracking**: Real-time RAM usage monitoring
+
+### RAM Filesystem Technology
+SSCC uses an intelligent RAM filesystem with priority fallback:
+
+1. **memfd_create()** (Primary) - Pure memory files, no disk I/O
+2. **/dev/shm** (Secondary) - Shared memory filesystem
+3. **Disk /tmp** (Fallback) - Traditional temporary directory
 
 ### Optional Addons
 - **sscc-libextra.addon** - Extended musl libraries (POSIX, threading, networking)
@@ -35,6 +44,22 @@ A truly portable, self-contained C compiler based on TCC (Tiny C Compiler) with 
 
 # With debugging info
 ./sscc -g -o debug_program program.c
+```
+
+### Example Output
+```bash
+$ ./sscc hello.c -o hello
+Created memory filesystem using memfd_create: /tmp/sscc_memfd_12345
+SSCC - Modular C Compiler
+Extracting core: 15 files...
+Extracting: include/stdio.h -> memfd (5.73 KB)
+Extracting: lib/libc.a -> memfd (48.14 KB)
+[... extraction details ...]
+Starting compilation...
+Total RAM used: 483.17 KB (memfd)
+
+$ ./hello
+Hello from SSCC!
 ```
 
 ### Using Addons
@@ -147,26 +172,29 @@ dist/sscc-VERSION/
 
 ## 🎯 Architecture
 
-### Self-Contained Design
+### Self-Contained Design with RAM Filesystem
 ```
-┌──────────────────────────────────────┐
-│             sscc (main)              │
-│  ┌─────────────┐ ┌─────────────────┐ │
-│  │ Embedded    │ │ Embedded Core   │ │
-│  │ TCC Binary  │ │ Resources       │ │
-│  │             │ │ • Headers       │ │
-│  │             │ │ • Libraries     │ │
-│  └─────────────┘ └─────────────────┘ │
-└──────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────┐
+│                    sscc (main)                           │
+│  ┌─────────────┐ ┌─────────────────┐ ┌─────────────────┐ │
+│  │ Embedded    │ │ Embedded Core   │ │ RAM Filesystem  │ │
+│  │ TCC Binary  │ │ Resources       │ │ Manager         │ │
+│  │ (373KB)     │ │ • Headers       │ │ • memfd_create  │ │
+│  │             │ │ • Libraries     │ │ • /dev/shm      │ │
+│  │             │ │ • Compressed    │ │ • Fallbacks     │ │
+│  └─────────────┘ └─────────────────┘ └─────────────────┘ │
+└──────────────────────────────────────────────────────────┘
            │
            ▼
-┌──────────────────────────────────────┐
-│         Runtime Process              │
-│  1. Extract TCC to /tmp/sscc_XXX/    │
-│  2. Extract core headers/libs        │
-│  3. Load available .addon files      │
-│  4. Execute TCC with proper paths    │
-└──────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────┐
+│                Runtime Process                           │
+│  1. Create RAM filesystem (memfd/shm/disk)              │
+│  2. Extract TCC binary to memory                        │
+│  3. Extract core headers/libs to memory                 │
+│  4. Load available .addon files                         │
+│  5. Execute TCC with memory-based paths                 │
+│  6. Track RAM usage and cleanup automatically           │
+└──────────────────────────────────────────────────────────┘
 ```
 
 ### Addon System
@@ -234,6 +262,11 @@ ls *.addon 2>/dev/null || echo "No addon files found"
 **"undefined reference" errors:**
 - Include required libraries: `-lm` for math, `-lgmp` for GMP
 - Load appropriate addon: `--addon sscc-gmp.addon` for GMP functions
+
+**Slow compilation on older systems:**
+- SSCC will automatically fall back to disk if RAM filesystem unavailable
+- Check which mode: `./sscc ... 2>&1 | head -1` shows filesystem type
+- memfd_create() requires Linux 3.17+, /dev/shm works on most systems
 
 **Build failures:**
 - Ensure all dependencies are installed

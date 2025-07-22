@@ -16,7 +16,7 @@ GMP_REPO = https://gmplib.org/download/gmp/gmp-6.3.0.tar.xz
 CFLAGS = -O2 -Wall
 LDFLAGS = -static
 
-VERSION = 1.1.0
+VERSION = 1.1.1
 
 .PHONY: all clean distclean setup deps tcc musl gmp sscc addons test build compressed package dist help
 
