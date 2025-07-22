@@ -140,7 +140,6 @@ sscc: tcc
 	echo '      echo "  sscc -static -o math math.c -lgmp"' >> $(BUILD_DIR)/sscc/sscc
 	echo '      echo ""' >> $(BUILD_DIR)/sscc/sscc
 	echo '      echo "Included libraries: musl libc, GMP (GNU Multiple Precision)"' >> $(BUILD_DIR)/sscc/sscc
-	echo '      echo "Package size: $$(du -sh "$$SCRIPT_DIR" | cut -f1)"' >> $(BUILD_DIR)/sscc/sscc
 	echo '      exit 0' >> $(BUILD_DIR)/sscc/sscc
 	echo '      ;;' >> $(BUILD_DIR)/sscc/sscc
 	echo '  esac' >> $(BUILD_DIR)/sscc/sscc

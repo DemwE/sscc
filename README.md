@@ -51,7 +51,7 @@ SSCC supports all standard TCC options plus the following helpful commands:
 ./build/sscc/sscc -I/path/to/headers -o program program.c
 
 # Link with specific libraries (already includes musl and GMP)
-./build/sscc/sscc -lm -o math_program math_program.c
+./build/sscc/sscc -static -o math_program math_program.c -lgmp
 ```
 
 ### Example Programs
@@ -101,9 +101,11 @@ int main() {
 
 Compile and run:
 ```bash
-./build/sscc/sscc -static -o bigmath bigmath.c
+./build/sscc/sscc -static -o bigmath bigmath.c -lgmp
 ./bigmath
 ```
+
+**Note:** When using GMP functions, you must include the `-lgmp` flag to link with the GMP library.
 
 ### Features Working
 
@@ -218,7 +220,8 @@ make distclean
 **Runtime Issues:**
 - Use `-static` flag for maximum portability
 - Include `#include <stdio.h>` for printf and other standard functions
-- GMP functions require `#include <gmp.h>`
+- GMP functions require `#include <gmp.h>` AND `-lgmp` linking flag
+- For undefined GMP symbols, ensure you're using `-lgmp` when compiling
 
 **Packaging Issues:**
 - Verify UPX is available for binary compression
