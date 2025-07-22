@@ -34,9 +34,9 @@ deps: setup
 	fi
 	@echo "Downloading musl..."
 	if [ ! -d $(MUSL_DIR) ]; then \
-		wget -O musl.tar.gz https://musl.libc.org/releases/musl-1.2.4.tar.gz; \
+		wget -O musl.tar.gz https://musl.libc.org/releases/musl-1.2.5.tar.gz; \
 		tar -xzf musl.tar.gz; \
-		mv musl-1.2.4 $(MUSL_DIR); \
+		mv musl-1.2.5 $(MUSL_DIR); \
 		rm musl.tar.gz; \
 	fi
 	@echo "Downloading GMP..."
@@ -55,10 +55,15 @@ musl: deps
 	$(MAKE) && $(MAKE) install
 
 # Build GMP
-gmp: deps
-	@echo "Building GMP..."
+gmp: musl
+	@echo "Building GMP with musl..."
 	cd $(GMP_DIR) && \
-	./configure --prefix=$(PWD)/$(BUILD_DIR)/gmp --disable-shared --enable-static && \
+	CC="$(PWD)/$(BUILD_DIR)/musl/bin/musl-gcc" \
+	CPPFLAGS="-I$(PWD)/$(BUILD_DIR)/musl/include" \
+	LDFLAGS="-L$(PWD)/$(BUILD_DIR)/musl/lib" \
+	./configure --prefix=$(PWD)/$(BUILD_DIR)/gmp \
+		--disable-shared --enable-static \
+		--host=x86_64-linux-musl && \
 	$(MAKE) && $(MAKE) install
 
 # Build TCC with integrated libraries
@@ -109,6 +114,38 @@ sscc: tcc
 	echo 'SCRIPT_DIR="$$( cd "$$( dirname "$${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"' >> $(BUILD_DIR)/sscc/sscc
 	echo 'SSCC_INCLUDE="$$SCRIPT_DIR/include"' >> $(BUILD_DIR)/sscc/sscc
 	echo 'SSCC_LIB="$$SCRIPT_DIR/lib/tcc"' >> $(BUILD_DIR)/sscc/sscc
+	echo '' >> $(BUILD_DIR)/sscc/sscc
+	echo '# Handle help flags' >> $(BUILD_DIR)/sscc/sscc
+	echo 'for arg in "$$@"; do' >> $(BUILD_DIR)/sscc/sscc
+	echo '  case "$$arg" in' >> $(BUILD_DIR)/sscc/sscc
+	echo '    -h|--help)' >> $(BUILD_DIR)/sscc/sscc
+	echo '      echo "SSCC - Self Sufficient C Compiler v$(VERSION)"' >> $(BUILD_DIR)/sscc/sscc
+	echo '      echo "A portable, self-contained C compiler based on TinyCC with musl and GMP"' >> $(BUILD_DIR)/sscc/sscc
+	echo '      echo ""' >> $(BUILD_DIR)/sscc/sscc
+	echo '      echo "Usage: sscc [options] file..."' >> $(BUILD_DIR)/sscc/sscc
+	echo '      echo ""' >> $(BUILD_DIR)/sscc/sscc
+	echo '      echo "Common options:"' >> $(BUILD_DIR)/sscc/sscc
+	echo '      echo "  -o FILE         Output to FILE"' >> $(BUILD_DIR)/sscc/sscc
+	echo '      echo "  -static         Create static executable (recommended)"' >> $(BUILD_DIR)/sscc/sscc
+	echo '      echo "  -v              Show version"' >> $(BUILD_DIR)/sscc/sscc
+	echo '      echo "  -g              Include debug information"' >> $(BUILD_DIR)/sscc/sscc
+	echo '      echo "  -O              Optimize code"' >> $(BUILD_DIR)/sscc/sscc
+	echo '      echo "  -Wall           Enable warnings"' >> $(BUILD_DIR)/sscc/sscc
+	echo '      echo "  -I DIR          Add include directory"' >> $(BUILD_DIR)/sscc/sscc
+	echo '      echo "  -L DIR          Add library directory"' >> $(BUILD_DIR)/sscc/sscc
+	echo '      echo "  -l LIB          Link with library"' >> $(BUILD_DIR)/sscc/sscc
+	echo '      echo ""' >> $(BUILD_DIR)/sscc/sscc
+	echo '      echo "Examples:"' >> $(BUILD_DIR)/sscc/sscc
+	echo '      echo "  sscc -static -o hello hello.c"' >> $(BUILD_DIR)/sscc/sscc
+	echo '      echo "  sscc -static -o math math.c -lgmp"' >> $(BUILD_DIR)/sscc/sscc
+	echo '      echo ""' >> $(BUILD_DIR)/sscc/sscc
+	echo '      echo "Included libraries: musl libc, GMP (GNU Multiple Precision)"' >> $(BUILD_DIR)/sscc/sscc
+	echo '      echo "Package size: $$(du -sh "$$SCRIPT_DIR" | cut -f1)"' >> $(BUILD_DIR)/sscc/sscc
+	echo '      exit 0' >> $(BUILD_DIR)/sscc/sscc
+	echo '      ;;' >> $(BUILD_DIR)/sscc/sscc
+	echo '  esac' >> $(BUILD_DIR)/sscc/sscc
+	echo 'done' >> $(BUILD_DIR)/sscc/sscc
+	echo '' >> $(BUILD_DIR)/sscc/sscc
 	echo 'exec "$$SCRIPT_DIR/sscc.bin" -I"$$SSCC_INCLUDE" -L"$$SSCC_LIB" -B"$$SSCC_LIB" "$$@"' >> $(BUILD_DIR)/sscc/sscc
 	chmod +x $(BUILD_DIR)/sscc/sscc
 	# Copy TCC runtime libraries
@@ -167,7 +204,8 @@ package: sscc
 	@echo 'set -e' >> dist/sscc-$(VERSION)/test.sh
 	@echo 'echo "Testing SSCC package..."' >> dist/sscc-$(VERSION)/test.sh
 	@echo 'cd "$$(dirname "$$0")"' >> dist/sscc-$(VERSION)/test.sh
-	@echo 'echo "int main(){printf(\"Hello from SSCC!\\\\n\");return 0;}" > test.c' >> dist/sscc-$(VERSION)/test.sh
+	@echo 'echo "#include <stdio.h>" > test.c' >> dist/sscc-$(VERSION)/test.sh
+	@echo 'echo "int main(){printf(\"Hello from SSCC!\\n\");return 0;}" >> test.c' >> dist/sscc-$(VERSION)/test.sh
 	@echo './sscc -static -o test test.c' >> dist/sscc-$(VERSION)/test.sh
 	@echo './test' >> dist/sscc-$(VERSION)/test.sh
 	@echo 'rm -f test test.c' >> dist/sscc-$(VERSION)/test.sh
