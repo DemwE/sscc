@@ -126,7 +126,6 @@ sscc: tcc
 	echo '      echo ""' >> $(BUILD_DIR)/sscc/sscc
 	echo '      echo "Common options:"' >> $(BUILD_DIR)/sscc/sscc
 	echo '      echo "  -o FILE         Output to FILE"' >> $(BUILD_DIR)/sscc/sscc
-	echo '      echo "  -static         Create static executable (recommended)"' >> $(BUILD_DIR)/sscc/sscc
 	echo '      echo "  -v              Show version"' >> $(BUILD_DIR)/sscc/sscc
 	echo '      echo "  -g              Include debug information"' >> $(BUILD_DIR)/sscc/sscc
 	echo '      echo "  -O              Optimize code"' >> $(BUILD_DIR)/sscc/sscc
@@ -135,17 +134,12 @@ sscc: tcc
 	echo '      echo "  -L DIR          Add library directory"' >> $(BUILD_DIR)/sscc/sscc
 	echo '      echo "  -l LIB          Link with library"' >> $(BUILD_DIR)/sscc/sscc
 	echo '      echo ""' >> $(BUILD_DIR)/sscc/sscc
-	echo '      echo "Examples:"' >> $(BUILD_DIR)/sscc/sscc
-	echo '      echo "  sscc -static -o hello hello.c"' >> $(BUILD_DIR)/sscc/sscc
-	echo '      echo "  sscc -static -o math math.c -lgmp"' >> $(BUILD_DIR)/sscc/sscc
-	echo '      echo ""' >> $(BUILD_DIR)/sscc/sscc
-	echo '      echo "Included libraries: musl libc, GMP (GNU Multiple Precision)"' >> $(BUILD_DIR)/sscc/sscc
 	echo '      exit 0' >> $(BUILD_DIR)/sscc/sscc
 	echo '      ;;' >> $(BUILD_DIR)/sscc/sscc
 	echo '  esac' >> $(BUILD_DIR)/sscc/sscc
 	echo 'done' >> $(BUILD_DIR)/sscc/sscc
 	echo '' >> $(BUILD_DIR)/sscc/sscc
-	echo 'exec "$$SCRIPT_DIR/sscc.bin" -I"$$SSCC_INCLUDE" -L"$$SSCC_LIB" -B"$$SSCC_LIB" "$$@"' >> $(BUILD_DIR)/sscc/sscc
+	echo 'exec "$$SCRIPT_DIR/sscc.bin" -I"$$SSCC_INCLUDE" -L"$$SSCC_LIB" -B"$$SSCC_LIB" -static "$$@"' >> $(BUILD_DIR)/sscc/sscc
 	chmod +x $(BUILD_DIR)/sscc/sscc
 	# Copy TCC runtime libraries
 	cp $(TCC_DIR)/libtcc1.a $(BUILD_DIR)/sscc/lib/tcc/
@@ -205,7 +199,7 @@ package: sscc
 	@echo 'cd "$$(dirname "$$0")"' >> dist/sscc-$(VERSION)/test.sh
 	@echo 'echo "#include <stdio.h>" > test.c' >> dist/sscc-$(VERSION)/test.sh
 	@echo 'echo "int main(){printf(\"Hello from SSCC!\\n\");return 0;}" >> test.c' >> dist/sscc-$(VERSION)/test.sh
-	@echo './sscc -static -o test test.c' >> dist/sscc-$(VERSION)/test.sh
+	@echo './sscc -o test test.c' >> dist/sscc-$(VERSION)/test.sh
 	@echo './test' >> dist/sscc-$(VERSION)/test.sh
 	@echo 'rm -f test test.c' >> dist/sscc-$(VERSION)/test.sh
 	@echo 'echo "✅ SSCC package test passed!"' >> dist/sscc-$(VERSION)/test.sh
@@ -217,7 +211,6 @@ package: sscc
 	@echo "" >> dist/sscc-$(VERSION)/README.txt
 	@echo "Usage:" >> dist/sscc-$(VERSION)/README.txt
 	@echo "  ./sscc -o program program.c" >> dist/sscc-$(VERSION)/README.txt
-	@echo "  ./sscc -static -o program program.c  # Recommended" >> dist/sscc-$(VERSION)/README.txt
 	@echo "" >> dist/sscc-$(VERSION)/README.txt
 	@echo "Test the package:" >> dist/sscc-$(VERSION)/README.txt
 	@echo "  ./test.sh" >> dist/sscc-$(VERSION)/README.txt

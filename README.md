@@ -16,14 +16,11 @@ The resulting compiler is self-contained and can compile C programs without requ
 Once built, SSCC is a self-contained C compiler that can be used just like any other C compiler:
 
 ```bash
-# Compile a simple program
+# Compile a simple program (static linking by default)
 ./build/sscc/sscc -o hello hello.c
 
-# Compile with static linking (recommended)
-./build/sscc/sscc -static -o hello hello.c
-
 # Compile with optimization
-./build/sscc/sscc -static -O2 -o hello hello.c
+./build/sscc/sscc -O2 -o hello hello.c
 
 # Get help and usage information
 ./build/sscc/sscc --help
@@ -51,7 +48,7 @@ SSCC supports all standard TCC options plus the following helpful commands:
 ./build/sscc/sscc -I/path/to/headers -o program program.c
 
 # Link with specific libraries (already includes musl and GMP)
-./build/sscc/sscc -static -o math_program math_program.c -lgmp
+./build/sscc/sscc -o math_program math_program.c -lgmp
 ```
 
 ### Example Programs
@@ -68,7 +65,7 @@ int main() {
 
 Compile and run:
 ```bash
-./build/sscc/sscc -static -o hello hello.c
+./build/sscc/sscc -o hello hello.c
 ./hello
 ```
 
@@ -101,16 +98,16 @@ int main() {
 
 Compile and run:
 ```bash
-./build/sscc/sscc -static -o bigmath bigmath.c -lgmp
+./build/sscc/sscc -o bigmath bigmath.c -lgmp
 ./bigmath
 ```
 
-**Note:** When using GMP functions, you must include the `-lgmp` flag to link with the GMP library.
+**Note:** When using GMP functions, you must include the `-lgmp` flag to link with the GMP library. All binaries are statically linked by default for maximum portability.
 
 ### Features Working
 
 - ✅ Complete C compiler with musl libc integration
-- ✅ Static linking support  
+- ✅ Static linking by default for portability  
 - ✅ Self-contained binary (no external dependencies)
 - ✅ Standard C library functions (stdio, stdlib, string, etc.)
 - ✅ GMP library integration for arbitrary precision arithmetic
@@ -218,7 +215,7 @@ make distclean
 - Verify internet connection for source downloads
 
 **Runtime Issues:**
-- Use `-static` flag for maximum portability
+- All binaries are statically linked by default for maximum portability
 - Include `#include <stdio.h>` for printf and other standard functions
 - GMP functions require `#include <gmp.h>` AND `-lgmp` linking flag
 - For undefined GMP symbols, ensure you're using `-lgmp` when compiling
@@ -263,7 +260,7 @@ cd sscc-VERSION/
 ./test.sh
 
 # Use the compiler
-./sscc -static -o hello hello.c
+./sscc -o hello hello.c
 ```
 
 ## Packaging and Distribution
@@ -301,7 +298,7 @@ cd sscc-VERSION
 ./test.sh
 
 # Manual usage
-./sscc -static -o hello hello.c
+./sscc -o hello hello.c
 ./hello
 ```
 
@@ -309,13 +306,11 @@ cd sscc-VERSION
 
 The portable package (`dist/sscc-VERSION/`) contains:
 - `sscc` - Portable wrapper script (uses `#!/usr/bin/env bash`)
-- `sscc.bin` - TCC compiler binary (164KB, statically linked)
+- `sscc.bin` - TCC compiler binary (169KB, UPX compressed, statically linked)
 - `include/` - 219 C standard library headers (musl + GMP)
 - `lib/tcc/` - 11 static libraries (musl, GMP, TCC runtime)
 - `test.sh` - Automated test script
 - `README.txt` - Usage instructions
-
-**Total size: 6.2MB uncompressed, 1.2MB compressed**
 
 The package is completely self-contained with no system dependencies.
 
@@ -336,7 +331,7 @@ SSCC consists of several key components working together:
   - Based on TCC v0.9.27
   - Statically linked with musl libc
   - No external dependencies
-  - ~164KB optimized size
+  - ~169KB optimized size (UPX compressed)
   
 - **`include/`** - Complete header collection:
   - 219 C standard library headers from musl
