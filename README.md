@@ -8,8 +8,9 @@ A truly portable, self-contained C compiler based on TCC (Tiny C Compiler) with 
 - **⚡ Fast Compilation**: Based on TCC for lightning-fast compile times
 - **📦 Complete Core**: Full POSIX functionality built-in + optional addons
 - **🚀 Portable**: Works on any Linux system without installation
-- **💾 Retro-Friendly**: Core fits in ~500KB for ultimate portability
+- **💾 Retro-Friendly**: Core fits in ~600KB for ultimate portability
 - **🎯 Static Linking**: All outputs are statically linked for true portability
+- **🧠 Smart Addons**: Dynamic core detection prevents file duplication
 
 ## 📋 What's Included
 
@@ -27,6 +28,14 @@ SSCC uses an intelligent RAM filesystem with priority fallback:
 1. **memfd_create()** (Primary) - Pure memory files, no disk I/O
 2. **/dev/shm** (Secondary) - Shared memory filesystem
 3. **Disk /tmp** (Fallback) - Traditional temporary directory
+
+### Dynamic Core Detection
+SSCC v1.2.0 introduces intelligent addon management:
+
+- **Automatic exclusion**: Addons automatically detect and exclude core files already embedded in SSCC
+- **No duplication**: Prevents duplicate headers/libraries between core and addons
+- **Optimal size**: Addons only contain additional functionality not in core
+- **Smart loading**: Runtime reads embedded core data to determine exclusions
 
 ### Optional Addons
 - **sscc-gmp.addon** - GNU Multiple Precision Arithmetic Library for advanced mathematical operations
@@ -48,30 +57,11 @@ SSCC uses an intelligent RAM filesystem with priority fallback:
 ### Example Output
 ```bash
 $ ./sscc hello.c -o hello
-Created memory filesystem using memfd_create: /tmp/sscc_memfd_2024050
+Created memory filesystem using memfd_create: /tmp/sscc_memfd_2225819
 SSCC - Modular C Compiler
-Extracting core: 19 files...
-Extracting: include/assert.h -> memfd (428 bytes)
-Extracting: include/stdlib.h -> memfd (4.76 KB)
-Extracting: include/stddef.h -> memfd (547 bytes)
-Extracting: include/tgmath.h -> memfd (8.36 KB)
-Extracting: include/stdbool.h -> memfd (167 bytes)
-Extracting: include/sys/errno.h -> memfd (86 bytes)
-Extracting: include/stdint.h -> memfd (2.52 KB)
-Extracting: include/stdio.h -> memfd (5.73 KB)
-Extracting: include/math.h -> memfd (11.22 KB)
-Extracting: include/features.h -> memfd (865 bytes)
-Extracting: include/bits/syscall.h -> memfd (20.30 KB)
-Extracting: include/bits/stdint.h -> memfd (540 bytes)
-Extracting: include/bits/alltypes.h -> memfd (11.18 KB)
-Extracting: include/bits/errno.h -> memfd (3.58 KB)
-Extracting: include/stdarg.h -> memfd (351 bytes)
-Extracting: include/errno.h -> memfd (369 bytes)
-Extracting: include/string.h -> memfd (2.94 KB)
-Extracting: lib/libtcc1.a -> memfd (48.14 KB)
-Extracting: lib/libm.a -> memfd (8 bytes)
-Extracting: tcc -> /tmp/sscc_memfd_2024050/tcc (168.18 KB)
-Libs cached size: 290.18 KB (memfd)
+Loading core 'musl': Complete C standard library (228 files)
+Core 'musl' loaded: 510.80 KB in RAM
+Total cached size: 892.52 KB (memfd)
 Starting compilation...
 
 $ ./hello
@@ -156,8 +146,8 @@ make sscc        # Create SSCC wrapper
 make addons      # Create addon packages
 
 # Create distribution
-make floppy      # Portable package
-make dist        # Compressed archives
+make dist        # Create distribution build
+make compressed  # Create compressed archives
 ```
 
 **Option 3: With Nix (Reproducible)**
@@ -171,9 +161,9 @@ make             # Build with all dependencies available
 - `make sscc` - Build core SSCC binary
 - `make addons` - Create addon packages
 - `make test` - Test the built compiler
-- `make floppy` - Create portable package
-- `make dist` - Create distribution archives
-- `make diskette` - Create 1.44MB floppy disk image
+- `make dist` - Create distribution build
+- `make compressed` - Create compressed archives
+- `make package` - Create distribution package (alias for dist)
 - `make clean` - Clean build artifacts
 - `make distclean` - Clean everything including downloads
 
@@ -182,9 +172,9 @@ make             # Build with all dependencies available
 After building, you'll find:
 
 ```
-dist/sscc-1.1.1/
-├── sscc                   # Self-contained executable (207K - core + TCC embedded)
-└── sscc-gmp.addon         # GMP math library addon (274K)
+dist/sscc/
+├── sscc                   # Self-contained executable (326K - core + TCC embedded)
+└── sscc-gmp.addon         # GMP math library addon (260K)
 ```
 
 ## 🎯 Architecture
@@ -192,27 +182,34 @@ dist/sscc-1.1.1/
 ### Self-Contained Design with RAM Filesystem
 ```
 ┌──────────────────────────────────────────────────────────┐
-│                    sscc (207K main)                     │
+│                    sscc (564K main)                      │
 │  ┌─────────────┐ ┌─────────────────┐ ┌─────────────────┐ │
 │  │ Embedded    │ │ Complete Core   │ │ RAM Filesystem  │ │
 │  │ TCC Binary  │ │ Resources       │ │ Manager         │ │
-│  │ (168KB)     │ │ • All Headers   │ │ • memfd_create  │ │
+│  │ (390KB)     │ │ • All Headers   │ │ • memfd_create  │ │
 │  │             │ │ • All Libraries │ │ • /dev/shm      │ │
 │  │             │ │ • Full POSIX    │ │ • Fallbacks     │ │
+│  │             │ │ • 228 files     │ │ • Auto cleanup  │ │
 │  └─────────────┘ └─────────────────┘ └─────────────────┘ │
 └──────────────────────────────────────────────────────────┘
            │
            ▼
 ┌──────────────────────────────────────────────────────────┐
 │                Runtime Process                           │
-│  1. Create RAM filesystem (memfd/shm/disk)              │
-│  2. Extract TCC binary to memory                        │
-│  3. Extract complete musl headers/libs to memory        │
-│  4. Load available .addon files                         │
-│  5. Execute TCC with memory-based paths                 │
-│  6. Track RAM usage and cleanup automatically           │
+│  1. Create RAM filesystem (memfd/shm/disk)               │
+│  2. Extract TCC binary to memory                         │
+│  3. Extract complete musl headers/libs to memory         │
+│  4. Load available .addon files with dynamic filtering   │
+│  5. Execute TCC with memory-based paths                  │
+│  6. Track RAM usage and cleanup automatically            │
 └──────────────────────────────────────────────────────────┘
 ```
+
+### Addon System with Dynamic Core Detection
+- **Explicit loading**: `--addon filename.addon`
+- **Smart exclusion**: Automatically excludes core files from addons
+- **Compressed**: Uses LZMA compression for optimal file sizes
+- **Modular**: Only load what you need
 
 ### Addon System
 - **Explicit loading**: `--addon filename.addon`
@@ -237,9 +234,9 @@ echo $?  # Should output: 42
 
 | Component | Size | Description |
 |-----------|------|-------------|
-| sscc (complete) | 207KB | Complete compiler with embedded TCC + full musl |
-| sscc-gmp.addon | 274KB | GMP math library addon |
-| **Total with GMP** | **481KB** | **Full-featured development environment** |
+| sscc (complete) | 326KB | Complete compiler with embedded TCC + full musl (228 files) |
+| sscc-gmp.addon | 260KB | GMP math library addon with smart core exclusion |
+| **Total with GMP** | **586KB** | **Full-featured development environment** |
 
 *Compare to GCC: ~100MB+ with dependencies*
 

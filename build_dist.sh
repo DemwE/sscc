@@ -3,5 +3,5 @@
 
 make all
 make addons
-make build
+make dist
 make compressed

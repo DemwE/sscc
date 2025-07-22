@@ -17,7 +17,7 @@ LDFLAGS = -static
 
 VERSION = 1.2.0
 
-.PHONY: all clean distclean setup deps tcc musl gmp sscc addons test build compressed package dist help
+.PHONY: all clean distclean setup deps tcc musl gmp sscc addons test dist compressed package help
 
 # Default target
 all: sscc
@@ -220,10 +220,9 @@ help:
 	@echo "  test      - Test the built compiler"
 	@echo ""
 	@echo "Package Targets:"
-	@echo "  build     - Create distribution build in dist/ folder"
+	@echo "  dist      - Create distribution build in dist/ folder"
 	@echo "  compressed - Create compressed archive (.tar.xz)"
-	@echo "  package   - Create distribution package (alias for build)"
-	@echo "  dist      - Create distribution archive (.tar.xz only, .gz removed)"
+	@echo "  package   - Create distribution package (alias for dist)"
 	@echo ""
 	@echo "Maintenance:"
 	@echo "  install   - Install SSCC to system"
@@ -233,13 +232,13 @@ help:
 	@echo ""
 	@echo "Usage Examples:"
 	@echo "  make && make test                    # Build and test"
-	@echo "  make build                          # Create distribution in dist/"
+	@echo "  make dist                           # Create distribution in dist/"
 	@echo "  make compressed                     # Create compressed archive (.tar.xz)"
 	@echo "  ./build/sscc/sscc -o hello hello.c  # Use compiler"
 
 
 # Create distribution build with core and addons
-build: sscc addons
+dist: sscc addons
 	@echo "Creating distribution build..."
 	@mkdir -p dist/sscc-$(VERSION)
 	@cp -r $(BUILD_DIR)/sscc/* dist/sscc-$(VERSION)/
@@ -251,19 +250,15 @@ build: sscc addons
 	@echo "Package size: $$(du -sh dist/sscc-$(VERSION) | cut -f1)"
 
 # Create compressed archive with everything
-compressed: build
+compressed: dist
 	@echo "Creating compressed archive..."
 	@cd dist && tar -cJf sscc-$(VERSION)-complete.tar.xz sscc-$(VERSION)/
 	@echo "✅ Compressed archive created:"
 	@ls -lh dist/sscc-$(VERSION)-complete.tar.xz
 	@echo "Archive size: $$(du -sh dist/sscc-$(VERSION)-complete.tar.xz | cut -f1)"
 
-package: build
+package: dist
 	@echo "✅ Package target complete"
-
-# Create distribution tarballs
-dist: compressed
-	@echo "✅ Distribution archives created in dist/"
 
 # Test the packaged version
 test-package: package
