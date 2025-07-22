@@ -108,29 +108,22 @@ sscc: tcc
 		echo "Ultra-compressed TCC: $$(du -h $(BUILD_DIR)/sscc/sscc.bin | cut -f1)"; \
 	fi
 	
-	# Prepare minimal core resources (absolute essentials only!)
-	@echo "Preparing minimal core resources..."
-	# Essential TCC runtime only
+	# Prepare complete core resources with full musl functionality
+	@echo "Preparing complete core resources with full musl..."
+	# Essential TCC runtime
 	cp $(TCC_DIR)/libtcc1.a $(BUILD_DIR)/sscc/temp_lib/
-	# Minimal musl headers - only what's needed for basic compilation
+	# Copy ALL musl headers and directory structure
+	cp -r $(BUILD_DIR)/musl/include/* $(BUILD_DIR)/sscc/temp_include/
+	# Ensure bits directory exists and copy all bits headers
 	mkdir -p $(BUILD_DIR)/sscc/temp_include/bits
-	cp $(BUILD_DIR)/musl/include/stdio.h $(BUILD_DIR)/sscc/temp_include/
-	cp $(BUILD_DIR)/musl/include/stdlib.h $(BUILD_DIR)/sscc/temp_include/
-	cp $(BUILD_DIR)/musl/include/string.h $(BUILD_DIR)/sscc/temp_include/
-	cp $(BUILD_DIR)/musl/include/stddef.h $(BUILD_DIR)/sscc/temp_include/
-	cp $(BUILD_DIR)/musl/include/stdint.h $(BUILD_DIR)/sscc/temp_include/
-	cp $(BUILD_DIR)/musl/include/stdarg.h $(BUILD_DIR)/sscc/temp_include/
-	cp $(BUILD_DIR)/musl/include/stdbool.h $(BUILD_DIR)/sscc/temp_include/
-	cp $(BUILD_DIR)/musl/include/math.h $(BUILD_DIR)/sscc/temp_include/
-	cp $(BUILD_DIR)/musl/include/errno.h $(BUILD_DIR)/sscc/temp_include/
-	cp $(BUILD_DIR)/musl/include/assert.h $(BUILD_DIR)/sscc/temp_include/
-	cp $(BUILD_DIR)/musl/include/features.h $(BUILD_DIR)/sscc/temp_include/
 	cp $(MUSL_DIR)/obj/include/bits/alltypes.h $(BUILD_DIR)/sscc/temp_include/bits/
 	cp $(MUSL_DIR)/obj/include/bits/syscall.h $(BUILD_DIR)/sscc/temp_include/bits/
-	-cp $(MUSL_DIR)/obj/include/bits/stdint.h $(BUILD_DIR)/sscc/temp_include/bits/ 2>/dev/null || true
-	# Core libraries only
-	cp $(BUILD_DIR)/musl/lib/libc.a $(BUILD_DIR)/sscc/temp_lib/
-	cp $(BUILD_DIR)/musl/lib/libm.a $(BUILD_DIR)/sscc/temp_lib/
+	# Fix missing bits/stdint.h
+	cp $(MUSL_DIR)/obj/include/bits/stdint.h $(BUILD_DIR)/sscc/temp_include/bits/ 2>/dev/null || \
+	cp $(BUILD_DIR)/musl/include/bits/stdint.h $(BUILD_DIR)/sscc/temp_include/bits/ 2>/dev/null || \
+	echo '#include "../stdint.h"' > $(BUILD_DIR)/sscc/temp_include/bits/stdint.h
+	# Copy ALL musl libraries
+	cp $(BUILD_DIR)/musl/lib/*.a $(BUILD_DIR)/sscc/temp_lib/ 2>/dev/null || true
 	
 	# Build minimal core embedder with LZMA
 	@echo "Building resource embedder..."
@@ -139,8 +132,8 @@ sscc: tcc
 	# Build binary to C converter
 	gcc -O2 -o $(BUILD_DIR)/sscc/bin2c src/bin2c.c
 	
-	# Create minimal core archive
-	@echo "Creating ultra-compressed core archive..."
+	# Create complete core archive with full functionality
+	@echo "Creating complete core archive with full musl functionality..."
 	$(BUILD_DIR)/sscc/embed_resources $(BUILD_DIR)/sscc/temp_include $(BUILD_DIR)/sscc/temp_lib $(BUILD_DIR)/sscc/core.bin
 	
 	# Convert to C source
@@ -164,23 +157,16 @@ sscc: tcc
 	# Remove sscc.bin since TCC binary is now embedded in sscc
 	rm -f $(BUILD_DIR)/sscc/sscc.bin
 	
-	@echo "✅ SSCC built successfully!"
+	@echo "✅ SSCC built successfully with complete musl functionality!"
 	@echo "Self-contained binary: $(BUILD_DIR)/sscc/sscc ($$(du -h $(BUILD_DIR)/sscc/sscc | cut -f1))"
 	@echo ""
-	@echo "✅ Ready for deployment! Single self-contained executable."
+	@echo "✅ Ready for deployment! Includes full POSIX functionality built-in."
 
 # Create addon files for modular deployment
 addons: sscc
 	@echo "Creating addon files..."
 	gcc -O2 -o $(BUILD_DIR)/sscc/create_addon src/create_addon.c -llzma
 	@echo "✅ Addon creator built"
-	@echo ""
-	@echo "Creating libextra addon with all additional musl libraries..."
-	cd $(BUILD_DIR)/sscc && ./create_addon libextra \
-		"Extended musl libraries - full POSIX functionality" \
-		../../build/musl/include \
-		../../build/musl/lib \
-		sscc-libextra.addon
 	@echo ""
 	@echo "Creating GMP addon..."
 	cd $(BUILD_DIR)/sscc && ./create_addon gmp \
@@ -191,7 +177,7 @@ addons: sscc
 	@echo ""
 	# Clean up the create_addon utility for release
 	rm -f $(BUILD_DIR)/sscc/create_addon
-	@echo "✅ Addon files created successfully!"
+	@echo "✅ GMP addon created successfully!"
 	@ls -lh $(BUILD_DIR)/sscc/*.addon 2>/dev/null || echo "No addon files found"
 
 # Test the built SSCC
@@ -237,8 +223,8 @@ help:
 	@echo "  musl      - Build musl library"
 	@echo "  gmp       - Build GMP library"  
 	@echo "  tcc       - Build TCC compiler"
-	@echo "  sscc      - Create SSCC binary with minimal core"
-	@echo "  addons    - Create addon files for modular deployment"
+	@echo "  sscc      - Create SSCC binary with complete musl core"
+	@echo "  addons    - Create GMP addon for modular deployment"
 	@echo "  test      - Test the built compiler"
 	@echo ""
 	@echo "Package Targets:"
