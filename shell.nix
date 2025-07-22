@@ -8,6 +8,15 @@ pkgs.mkShell {
     gcc
     gnumake
     binutils
+
+    # Other build tools
+    flex
+    bison
+    zlib
+    zlib.dev
+    zlib.static
+    xz
+    xxd
     
     # Version control and download tools
     git
@@ -28,10 +37,6 @@ pkgs.mkShell {
     m4
     texinfo
     
-    # Build dependencies for musl and GMP
-    flex
-    bison
-    
     # Additional utilities
     file
     which
@@ -40,6 +45,7 @@ pkgs.mkShell {
     diffutils
     patch
     upx
+    mtools
     
     # For testing and validation
     strace
@@ -54,12 +60,16 @@ pkgs.mkShell {
     echo "   • git $(git --version | cut -d' ' -f3)"
     echo "   • autotools $(autoconf --version | head -1 | cut -d' ' -f4)"
     echo "   • upx $(upx --version 2>/dev/null | head -1 | cut -d' ' -f2 || echo 'available')"
+    echo "   • zlib $(pkg-config --modversion zlib)"
+    echo "   • lzma $(xz --version 2>/dev/null | head -1 | cut -d' ' -f4 || echo 'available')"
+    echo "   • mtools $(mtools --version 2>/dev/null | head -1 | cut -d' ' -f2 || echo 'available')"
     echo ""
     echo "🚀 To build SSCC:"
     echo "   make           # Build everything"
     echo "   make package   # Create portable package"
     echo "   make dist      # Create distribution archives"
-    echo "   make test      # Test the built compiler"
+    echo "   make floppy    # Create 1.44MB floppy package"
+    echo "   make addons    # Create addon files"
     echo "   make help      # Show all available targets"
     echo ""
     echo "📁 Build outputs:"
@@ -71,6 +81,15 @@ pkgs.mkShell {
     export CC=gcc
     export CXX=g++
     export MAKE=make
+    
+    # Ensure proper temporary directory
+    export TMPDIR=/tmp
+    
+    # Ensure proper library paths for static linking
+    export PKG_CONFIG_PATH="${pkgs.zlib.dev}/lib/pkgconfig:${pkgs.zlib.static}/lib/pkgconfig:$PKG_CONFIG_PATH"
+    export LIBRARY_PATH="${pkgs.zlib.static}/lib:${pkgs.zlib}/lib:$LIBRARY_PATH"
+    export LD_LIBRARY_PATH="${pkgs.zlib}/lib:$LD_LIBRARY_PATH"
+    export C_INCLUDE_PATH="${pkgs.zlib.dev}/include:$C_INCLUDE_PATH"
     
     # Ensure proper paths for built tools
     export PATH="$PWD/build/sscc:$PWD/build/musl/bin:$PWD/build/gmp/bin:$PATH"

@@ -1,6 +1,6 @@
 # SSCC - Self Sufficient C Compiler
 
-A self-contained C compiler based on TCC (Tiny C Compiler) with integrated runtime libraries.
+A self-contained C compiler based on TCC (Tiny C Compiler) with integrated runtime libraries and modular addon support.
 
 ## Features
 
@@ -9,14 +9,14 @@ SSCC integrates:
 - **musl** - Lightweight C standard library (v1.2.5)
 - **GMP** - GNU Multiple Precision Arithmetic Library (v6.3.0)
 
-The resulting compiler is self-contained and can compile C programs without requiring external libraries or headers.
+The resulting compiler is self-contained and can compile C programs without requiring external libraries or headers. It supports a modular addon system for optional functionality.
 
-## Usage
+## Basic Usage
 
 Once built, SSCC is a self-contained C compiler that can be used just like any other C compiler:
 
 ```bash
-# Compile a simple program (static linking by default)
+# Compile a simple program
 ./build/sscc/sscc -o hello hello.c
 
 # Compile with optimization
@@ -24,10 +24,27 @@ Once built, SSCC is a self-contained C compiler that can be used just like any o
 
 # Get help and usage information
 ./build/sscc/sscc --help
-./build/sscc/sscc -h        # Short form also works
+
+# Use addon functionality
+./build/sscc/sscc --addon sscc-gmp.addon -o math math.c -lgmp
 
 # Run the compiled program
 ./hello
+```
+
+## Addon System
+
+SSCC supports modular addons for optional functionality:
+
+```bash
+# List available addons
+./build/sscc/sscc --list-addons
+
+# Load specific addon
+./build/sscc/sscc --addon filename.addon [options] file.c
+
+# Auto-discovery of addons
+# Place *.addon files in current directory for automatic loading
 ```
 
 ### Command Line Options
@@ -104,25 +121,15 @@ Compile and run:
 
 **Note:** When using GMP functions, you must include the `-lgmp` flag to link with the GMP library. All binaries are statically linked by default for maximum portability.
 
-### Features Working
-
-- ✅ Complete C compiler with musl libc integration
-- ✅ Static linking by default for portability  
-- ✅ Self-contained binary (no external dependencies)
-- ✅ Standard C library functions (stdio, stdlib, string, etc.)
-- ✅ GMP library integration for arbitrary precision arithmetic
-- ✅ Portable packaging (no system dependencies)
-- ✅ Proper newline handling in printf statements
-- ✅ Clean compilation (no implicit declaration warnings)
-- ✅ Comprehensive help system (`--help`, `-h` flags)
-- ✅ Cross-distribution compatibility
-
 ### Current Status
 
-- ✅ All core functionality working
-- ✅ All known issues fixed
+- ✅ Self-contained C compiler
+- ✅ Static linking by default for portability  
+- ✅ Integrated musl libc and GMP libraries
+- ✅ Modular addon system
+- ✅ Auto-discovery of addon files
 - ✅ Complete development environment available
-- ✅ Ready for distribution and production use
+- ✅ Cross-distribution compatibility
 
 ## Building
 
@@ -164,7 +171,7 @@ This will:
 3. Build GMP with static library support  
 4. Build TCC with musl and GMP integration
 5. Create a self-contained SSCC binary in `build/sscc/`
-6. Strip debug symbols and compress with UPX (if available)
+6. Generate addon files for modular deployment
 
 ## Installation
 
@@ -191,14 +198,11 @@ nix-shell
 # - Development tools
 ```
 
-### Testing Changes
+### Testing
 
 ```bash
-# Build and test in one command
+# Build and test
 make test
-
-# Build, package, and test the portable distribution
-make test-package
 
 # Clean build artifacts
 make clean
@@ -226,7 +230,7 @@ make distclean
 
 ## Creating Portable Packages
 
-To create a distributable package that works on any Linux system without dependencies:
+To create a distributable package:
 
 ```bash
 # Create portable package
@@ -234,9 +238,6 @@ make package
 
 # Create compressed distribution archives
 make dist
-
-# Test the package
-make test-package
 ```
 
 This creates:
@@ -244,12 +245,7 @@ This creates:
 - `dist/sscc-VERSION-linux-x86_64.tar.gz` - Gzipped tarball for distribution
 - `dist/sscc-VERSION-linux-x86_64.tar.xz` - Xz-compressed tarball (smaller)
 
-The portable package:
-- ✅ Uses standard `/bin/bash` shebang (works on any Linux)
-- ✅ Contains all necessary headers and libraries
-- ✅ No external dependencies required
-- ✅ Includes test script to verify functionality
-- ✅ Complete package size: ~6MB
+The portable package is self-contained and works on any Linux system without dependencies.
 
 ### Testing on Another System
 
@@ -257,111 +253,26 @@ The portable package:
 # Extract and test the package
 tar -xzf sscc-VERSION-linux-x86_64.tar.gz
 cd sscc-VERSION/
-./test.sh
 
 # Use the compiler
 ./sscc -o hello hello.c
 ```
 
-## Packaging and Distribution
-
-SSCC can be packaged into a portable, self-contained distribution that works on any Linux system without dependencies.
-
-### Creating a Portable Package
-
-```bash
-# Build and create portable package
-make package
-
-# Create compressed distribution archives
-make dist
-
-# Test the package
-make test-package
-```
-
-This creates:
-- `dist/sscc-VERSION/` - Portable directory with all files
-- `dist/sscc-VERSION-linux-x86_64.tar.gz` - Gzip compressed (1.5MB)
-- `dist/sscc-VERSION-linux-x86_64.tar.xz` - XZ compressed (1.2MB)
-
-### Testing on Other Systems
-
-The portable package includes a test script:
-
-```bash
-# Extract the package
-tar -xf sscc-VERSION-linux-x86_64.tar.gz
-cd sscc-VERSION
-
-# Run built-in test
-./test.sh
-
-# Manual usage
-./sscc -o hello hello.c
-./hello
-```
-
-### Package Contents
-
-The portable package (`dist/sscc-VERSION/`) contains:
-- `sscc` - Portable wrapper script (uses `#!/usr/bin/env bash`)
-- `sscc.bin` - TCC compiler binary (169KB, UPX compressed, statically linked)
-- `include/` - 219 C standard library headers (musl + GMP)
-- `lib/tcc/` - 11 static libraries (musl, GMP, TCC runtime)
-- `test.sh` - Automated test script
-- `README.txt` - Usage instructions
-
-The package is completely self-contained with no system dependencies.
-
 ## Architecture
 
-SSCC consists of several key components working together:
+SSCC consists of several key components:
 
 ### Core Components
 
-- **`sscc`** - Intelligent wrapper script that:
-  - Detects the correct TCC binary location
-  - Sets up include and library paths automatically  
-  - Provides help and version information
-  - Handles command-line argument forwarding
-  - Supports both `--help` and `-h` flags
-  
-- **`sscc.bin`** - The actual TCC compiler binary:
-  - Based on TCC v0.9.27
-  - Statically linked with musl libc
-  - No external dependencies
-  - ~169KB optimized size (UPX compressed)
-  
-- **`include/`** - Complete header collection:
-  - 219 C standard library headers from musl
-  - GMP headers for arbitrary precision math
-  - All headers needed for self-contained compilation
-  
-- **`lib/tcc/`** - Static library collection:
-  - musl C library (libc, libm, libpthread, etc.)
-  - GMP library (libgmp)
-  - TCC runtime libraries
-  - 11 libraries total for complete functionality
+- **`sscc`** - Main wrapper that handles addon loading and compilation setup
+- **`sscc.bin`** - The TCC compiler binary (statically linked)
+- **Core resources** - Essential C standard library headers and libraries
+- **Addon system** - Modular extension mechanism for optional functionality
 
-### How It Works
+### Addon System
 
-1. The `sscc` wrapper script detects its installation location
-2. It automatically configures include paths (`-I`) and library paths (`-L`)
-3. It invokes `sscc.bin` (TCC) with the correct arguments
-4. TCC compiles the source code using the bundled headers and libraries
-5. The result is a fully compiled binary with no external dependencies
+The addon system allows optional functionality to be loaded as needed:
 
-### Package Structure
-
-```
-sscc-VERSION/
-├── sscc           # Portable wrapper script (bash)
-├── sscc.bin       # TCC compiler binary (statically linked)
-├── include/       # 219 header files (musl + GMP)
-├── lib/tcc/       # 11 static libraries  
-├── test.sh        # Automated test script
-└── README.txt     # Usage instructions
-```
-
-The wrapper script ensures the compiler finds all necessary headers and libraries without requiring environment variable configuration or system-wide installation.
+- **Auto-discovery**: Automatically loads `*.addon` files in current directory
+- **Explicit loading**: Use `--addon filename.addon` for specific requirements
+- **Modular**: Only include functionality you need

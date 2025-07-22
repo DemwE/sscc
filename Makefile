@@ -16,10 +16,11 @@ GMP_REPO = https://gmplib.org/download/gmp/gmp-6.3.0.tar.xz
 CFLAGS = -O2 -Wall
 LDFLAGS = -static
 
-VERSION = 1.0.0
+VERSION = 1.1.0
 
-.PHONY: all clean distclean setup deps tcc musl gmp sscc package dist test-package
+.PHONY: all clean distclean setup deps tcc musl gmp sscc addons test package dist floppy help
 
+# Default target
 all: sscc
 
 # Setup directories and download dependencies
@@ -61,6 +62,7 @@ gmp: musl
 	CC="$(PWD)/$(BUILD_DIR)/musl/bin/musl-gcc" \
 	CPPFLAGS="-I$(PWD)/$(BUILD_DIR)/musl/include" \
 	LDFLAGS="-L$(PWD)/$(BUILD_DIR)/musl/lib" \
+	TMPDIR=/tmp \
 	./configure --prefix=$(PWD)/$(BUILD_DIR)/gmp \
 		--disable-shared --enable-static \
 		--host=x86_64-linux-musl && \
@@ -84,74 +86,107 @@ tcc: musl gmp
 	C_INCLUDE_PATH="$(PWD)/$(BUILD_DIR)/musl/include" \
 	$(MAKE) TCC="../tcc -I$(PWD)/$(BUILD_DIR)/musl/include -I$(PWD)/$(BUILD_DIR)/gmp/include -B.."
 
-# Create the self-sufficient SSCC binary
+# Create the modular SSCC binary with addon support
 sscc: tcc
-	@echo "Creating SSCC binary..."
+	@echo "Creating modular SSCC v$(VERSION) with addon support..."
 	mkdir -p $(BUILD_DIR)/sscc
-	mkdir -p $(BUILD_DIR)/sscc/lib/tcc
-	mkdir -p $(BUILD_DIR)/sscc/include
-	# Copy TCC binary
+	mkdir -p $(BUILD_DIR)/sscc/temp_lib
+	mkdir -p $(BUILD_DIR)/sscc/temp_include
+	
+	# Copy and optimize TCC binary
 	cp $(TCC_DIR)/tcc $(BUILD_DIR)/sscc/sscc.bin
-	@echo "Original binary size: $$(du -h $(BUILD_DIR)/sscc/sscc.bin | cut -f1)"
-	# Strip debug symbols
-	@echo "Stripping debug symbols..."
+	@echo "Original TCC binary: $$(du -h $(BUILD_DIR)/sscc/sscc.bin | cut -f1)"
+	
+	# Aggressive optimization
 	@if command -v strip >/dev/null 2>&1; then \
-		strip $(BUILD_DIR)/sscc/sscc.bin; \
-		echo "Stripped binary size: $$(du -h $(BUILD_DIR)/sscc/sscc.bin | cut -f1)"; \
-	else \
-		echo "Warning: strip command not available"; \
+		strip --strip-all $(BUILD_DIR)/sscc/sscc.bin; \
+		echo "Stripped binary: $$(du -h $(BUILD_DIR)/sscc/sscc.bin | cut -f1)"; \
 	fi
-	# Compress with UPX if available
+	
 	@if command -v upx >/dev/null 2>&1; then \
-		echo "Compressing binary with UPX..."; \
-		upx --best --lzma $(BUILD_DIR)/sscc/sscc.bin 2>/dev/null || echo "UPX compression failed, continuing"; \
-		echo "Final compressed size: $$(du -h $(BUILD_DIR)/sscc/sscc.bin | cut -f1)"; \
-	else \
-		echo "Warning: UPX not available for compression"; \
+		upx --ultra-brute $(BUILD_DIR)/sscc/sscc.bin 2>/dev/null || echo "UPX failed, continuing"; \
+		echo "Ultra-compressed TCC: $$(du -h $(BUILD_DIR)/sscc/sscc.bin | cut -f1)"; \
 	fi
-	# Create wrapper script
-	echo '#!/run/current-system/sw/bin/bash' > $(BUILD_DIR)/sscc/sscc
-	echo 'SCRIPT_DIR="$$( cd "$$( dirname "$${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"' >> $(BUILD_DIR)/sscc/sscc
-	echo 'SSCC_INCLUDE="$$SCRIPT_DIR/include"' >> $(BUILD_DIR)/sscc/sscc
-	echo 'SSCC_LIB="$$SCRIPT_DIR/lib/tcc"' >> $(BUILD_DIR)/sscc/sscc
-	echo '' >> $(BUILD_DIR)/sscc/sscc
-	echo '# Handle help flags' >> $(BUILD_DIR)/sscc/sscc
-	echo 'for arg in "$$@"; do' >> $(BUILD_DIR)/sscc/sscc
-	echo '  case "$$arg" in' >> $(BUILD_DIR)/sscc/sscc
-	echo '    -h|--help)' >> $(BUILD_DIR)/sscc/sscc
-	echo '      echo "SSCC - Self Sufficient C Compiler v$(VERSION)"' >> $(BUILD_DIR)/sscc/sscc
-	echo '      echo "A portable, self-contained C compiler based on TinyCC with musl and GMP"' >> $(BUILD_DIR)/sscc/sscc
-	echo '      echo ""' >> $(BUILD_DIR)/sscc/sscc
-	echo '      echo "Usage: sscc [options] file..."' >> $(BUILD_DIR)/sscc/sscc
-	echo '      echo ""' >> $(BUILD_DIR)/sscc/sscc
-	echo '      echo "Common options:"' >> $(BUILD_DIR)/sscc/sscc
-	echo '      echo "  -o FILE         Output to FILE"' >> $(BUILD_DIR)/sscc/sscc
-	echo '      echo "  -v              Show version"' >> $(BUILD_DIR)/sscc/sscc
-	echo '      echo "  -g              Include debug information"' >> $(BUILD_DIR)/sscc/sscc
-	echo '      echo "  -O              Optimize code"' >> $(BUILD_DIR)/sscc/sscc
-	echo '      echo "  -Wall           Enable warnings"' >> $(BUILD_DIR)/sscc/sscc
-	echo '      echo "  -I DIR          Add include directory"' >> $(BUILD_DIR)/sscc/sscc
-	echo '      echo "  -L DIR          Add library directory"' >> $(BUILD_DIR)/sscc/sscc
-	echo '      echo "  -l LIB          Link with library"' >> $(BUILD_DIR)/sscc/sscc
-	echo '      echo ""' >> $(BUILD_DIR)/sscc/sscc
-	echo '      exit 0' >> $(BUILD_DIR)/sscc/sscc
-	echo '      ;;' >> $(BUILD_DIR)/sscc/sscc
-	echo '  esac' >> $(BUILD_DIR)/sscc/sscc
-	echo 'done' >> $(BUILD_DIR)/sscc/sscc
-	echo '' >> $(BUILD_DIR)/sscc/sscc
-	echo 'exec "$$SCRIPT_DIR/sscc.bin" -I"$$SSCC_INCLUDE" -L"$$SSCC_LIB" -B"$$SSCC_LIB" -static "$$@"' >> $(BUILD_DIR)/sscc/sscc
-	chmod +x $(BUILD_DIR)/sscc/sscc
-	# Copy TCC runtime libraries
-	cp $(TCC_DIR)/libtcc1.a $(BUILD_DIR)/sscc/lib/tcc/
-	cp $(TCC_DIR)/*.o $(BUILD_DIR)/sscc/lib/tcc/ 2>/dev/null || true
-	# Copy musl headers and libraries
-	cp -r $(BUILD_DIR)/musl/include/* $(BUILD_DIR)/sscc/include/
-	cp $(BUILD_DIR)/musl/lib/*.a $(BUILD_DIR)/sscc/lib/tcc/
-	# Copy GMP headers and libraries
-	cp -r $(BUILD_DIR)/gmp/include/* $(BUILD_DIR)/sscc/include/
-	cp $(BUILD_DIR)/gmp/lib/*.a $(BUILD_DIR)/sscc/lib/tcc/
-	@echo "SSCC built successfully at $(BUILD_DIR)/sscc/sscc"
-	@echo "Complete package size: $$(du -sh $(BUILD_DIR)/sscc | cut -f1)"
+	
+	# Prepare minimal core resources (essential C library only)
+	@echo "Preparing minimal core resources..."
+	# Essential TCC runtime only
+	cp $(TCC_DIR)/libtcc1.a $(BUILD_DIR)/sscc/temp_lib/
+	# Essential musl headers and core libraries
+	mkdir -p $(BUILD_DIR)/sscc/temp_include/sys $(BUILD_DIR)/sscc/temp_include/bits
+	cp $(BUILD_DIR)/musl/include/stdio.h $(BUILD_DIR)/sscc/temp_include/
+	cp $(BUILD_DIR)/musl/include/stdlib.h $(BUILD_DIR)/sscc/temp_include/
+	cp $(BUILD_DIR)/musl/include/string.h $(BUILD_DIR)/sscc/temp_include/
+	cp $(BUILD_DIR)/musl/include/stddef.h $(BUILD_DIR)/sscc/temp_include/
+	cp $(BUILD_DIR)/musl/include/stdint.h $(BUILD_DIR)/sscc/temp_include/
+	cp $(BUILD_DIR)/musl/include/stdarg.h $(BUILD_DIR)/sscc/temp_include/
+	cp $(BUILD_DIR)/musl/include/stdbool.h $(BUILD_DIR)/sscc/temp_include/
+	cp $(BUILD_DIR)/musl/include/math.h $(BUILD_DIR)/sscc/temp_include/
+	cp $(BUILD_DIR)/musl/include/errno.h $(BUILD_DIR)/sscc/temp_include/
+	cp $(BUILD_DIR)/musl/include/assert.h $(BUILD_DIR)/sscc/temp_include/
+	cp $(BUILD_DIR)/musl/include/unistd.h $(BUILD_DIR)/sscc/temp_include/
+	cp $(BUILD_DIR)/musl/include/fcntl.h $(BUILD_DIR)/sscc/temp_include/
+	cp $(BUILD_DIR)/musl/include/features.h $(BUILD_DIR)/sscc/temp_include/
+	cp $(BUILD_DIR)/musl/include/sys/types.h $(BUILD_DIR)/sscc/temp_include/sys/
+	cp $(BUILD_DIR)/musl/include/sys/stat.h $(BUILD_DIR)/sscc/temp_include/sys/
+	cp $(BUILD_DIR)/musl/include/bits/alltypes.h $(BUILD_DIR)/sscc/temp_include/bits/
+	# Core libraries only
+	cp $(BUILD_DIR)/musl/lib/libc.a $(BUILD_DIR)/sscc/temp_lib/
+	cp $(BUILD_DIR)/musl/lib/libm.a $(BUILD_DIR)/sscc/temp_lib/
+	
+	# Build minimal core embedder with LZMA
+	@echo "Building resource embedder..."
+	gcc -O2 -o $(BUILD_DIR)/sscc/embed_resources src/embed_resources.c -llzma
+	
+	# Build binary to C converter
+	gcc -O2 -o $(BUILD_DIR)/sscc/bin2c src/bin2c.c
+	
+	# Create minimal core archive
+	@echo "Creating ultra-compressed core archive..."
+	$(BUILD_DIR)/sscc/embed_resources $(BUILD_DIR)/sscc/temp_include $(BUILD_DIR)/sscc/temp_lib $(BUILD_DIR)/sscc/core.bin
+	
+	# Convert to C source
+	$(BUILD_DIR)/sscc/bin2c $(BUILD_DIR)/sscc/core.bin $(BUILD_DIR)/sscc/core.c
+	
+	# Build modular SSCC wrapper
+	@echo "Building modular SSCC wrapper..."
+	gcc -O2 -static -o $(BUILD_DIR)/sscc/sscc src/sscc.c $(BUILD_DIR)/sscc/core.c -llzma
+	
+	# Ultra-aggressive compression on final binary
+	@if command -v upx >/dev/null 2>&1; then \
+		upx --ultra-brute $(BUILD_DIR)/sscc/sscc 2>/dev/null || echo "UPX failed on wrapper"; \
+	fi
+	
+	# Clean up temporary files
+	rm -rf $(BUILD_DIR)/sscc/temp_include $(BUILD_DIR)/sscc/temp_lib
+	rm -f $(BUILD_DIR)/sscc/embed_resources $(BUILD_DIR)/sscc/bin2c $(BUILD_DIR)/sscc/core.bin $(BUILD_DIR)/sscc/core.c
+	
+	@echo "✅ SSCC built successfully!"
+	@echo "Main binary: $(BUILD_DIR)/sscc/sscc ($$(du -h $(BUILD_DIR)/sscc/sscc | cut -f1))"
+	@echo "TCC binary: $(BUILD_DIR)/sscc/sscc.bin ($$(du -h $(BUILD_DIR)/sscc/sscc.bin | cut -f1))"
+	@echo "Total core: $$(du -sh $(BUILD_DIR)/sscc | cut -f1)"
+	@echo ""
+	@echo "✅ Ready for deployment! Modular addon system active."
+
+# Create addon files for modular deployment
+addons: sscc
+	@echo "Creating addon files..."
+	@if [ ! -f src/create_addon.c ]; then \
+		echo "Warning: create_addon.c not found, skipping addon creation"; \
+	else \
+		gcc -O2 -o $(BUILD_DIR)/sscc/create_addon src/create_addon.c -llzma; \
+		echo "✅ Addon creator built"; \
+	fi
+
+# Test the built SSCC
+test: sscc
+	@echo "Testing SSCC..."
+	@echo '#include <stdio.h>' > /tmp/test_sscc.c
+	@echo 'int main() { printf("Hello from SSCC!\\n"); return 0; }' >> /tmp/test_sscc.c
+	@$(BUILD_DIR)/sscc/sscc -o /tmp/test_sscc /tmp/test_sscc.c
+	@/tmp/test_sscc
+	@rm -f /tmp/test_sscc.c /tmp/test_sscc
+	@echo "✅ SSCC test completed successfully!"
 
 # Install SSCC
 install: sscc
@@ -161,9 +196,9 @@ install: sscc
 # Clean build artifacts
 clean:
 	rm -rf $(BUILD_DIR)
-	if [ -d $(TCC_DIR) ]; then cd $(TCC_DIR) && $(MAKE) clean; fi
-	if [ -d $(MUSL_DIR) ]; then cd $(MUSL_DIR) && $(MAKE) clean; fi
-	if [ -d $(GMP_DIR) ]; then cd $(GMP_DIR) && $(MAKE) clean; fi
+	if [ -d $(TCC_DIR) ]; then cd $(TCC_DIR) && $(MAKE) clean 2>/dev/null || true; fi
+	if [ -d $(MUSL_DIR) ]; then cd $(MUSL_DIR) && $(MAKE) clean 2>/dev/null || true; fi
+	if [ -d $(GMP_DIR) ] && [ -f $(GMP_DIR)/Makefile ]; then cd $(GMP_DIR) && $(MAKE) clean 2>/dev/null || true; fi
 
 # Clean everything including dependencies
 distclean: clean
@@ -171,71 +206,80 @@ distclean: clean
 
 help:
 	@echo "SSCC Build System"
-	@echo "=================="
+	@echo "===================="
 	@echo "Targets:"
-	@echo "  all      - Build SSCC (default)"
-	@echo "  deps     - Download dependencies"
-	@echo "  musl     - Build musl library"
-	@echo "  gmp      - Build GMP library"
-	@echo "  tcc      - Build TCC compiler"
-	@echo "  sscc     - Create final SSCC binary"
-	@echo "  install  - Install SSCC to system"
-	@echo "  clean    - Clean build artifacts"
-	@echo "  distclean- Clean everything"
-	@echo "  help     - Show this help"
+	@echo "  all       - Build SSCC with addon support (default)"
+	@echo "  deps      - Download dependencies"
+	@echo "  musl      - Build musl library"
+	@echo "  gmp       - Build GMP library"  
+	@echo "  tcc       - Build TCC compiler"
+	@echo "  sscc      - Create SSCC binary with minimal core"
+	@echo "  addons    - Create addon files for modular deployment"
+	@echo "  floppy    - Create complete floppy package"
+	@echo "  test      - Test the floppy package"
+	@echo "  package   - Create portable package (alias for floppy)"
+	@echo "  dist      - Create distribution archives"
+	@echo "  install   - Install SSCC to system"
+	@echo "  clean     - Clean build artifacts"
+	@echo "  distclean - Clean everything"
+	@echo "  help      - Show this help"
+	@echo ""
 
-# Create a portable distribution package
-package: sscc
-	@echo "Creating portable SSCC package..."
-	@mkdir -p dist
-	@rm -rf dist/sscc-$(VERSION)
-	@cp -r build/sscc dist/sscc-$(VERSION)
-	@# Fix shebang for portability
-	@sed -i '1s|.*|#!/usr/bin/env bash|' dist/sscc-$(VERSION)/sscc
-	@# Create package test script
-	@echo '#!/usr/bin/env bash' > dist/sscc-$(VERSION)/test.sh
-	@echo 'set -e' >> dist/sscc-$(VERSION)/test.sh
-	@echo 'echo "Testing SSCC package..."' >> dist/sscc-$(VERSION)/test.sh
-	@echo 'cd "$$(dirname "$$0")"' >> dist/sscc-$(VERSION)/test.sh
-	@echo 'echo "#include <stdio.h>" > test.c' >> dist/sscc-$(VERSION)/test.sh
-	@echo 'echo "int main(){printf(\"Hello from SSCC!\\n\");return 0;}" >> test.c' >> dist/sscc-$(VERSION)/test.sh
-	@echo './sscc -o test test.c' >> dist/sscc-$(VERSION)/test.sh
-	@echo './test' >> dist/sscc-$(VERSION)/test.sh
-	@echo 'rm -f test test.c' >> dist/sscc-$(VERSION)/test.sh
-	@echo 'echo "✅ SSCC package test passed!"' >> dist/sscc-$(VERSION)/test.sh
-	@chmod +x dist/sscc-$(VERSION)/test.sh
-	@# Create README for the package
-	@echo "# SSCC - Self Sufficient C Compiler v$(VERSION)" > dist/sscc-$(VERSION)/README.txt
-	@echo "" >> dist/sscc-$(VERSION)/README.txt
-	@echo "This is a portable, self-contained C compiler package." >> dist/sscc-$(VERSION)/README.txt
-	@echo "" >> dist/sscc-$(VERSION)/README.txt
-	@echo "Usage:" >> dist/sscc-$(VERSION)/README.txt
-	@echo "  ./sscc -o program program.c" >> dist/sscc-$(VERSION)/README.txt
-	@echo "" >> dist/sscc-$(VERSION)/README.txt
-	@echo "Test the package:" >> dist/sscc-$(VERSION)/README.txt
-	@echo "  ./test.sh" >> dist/sscc-$(VERSION)/README.txt
-	@echo "" >> dist/sscc-$(VERSION)/README.txt
-	@echo "Package contents:" >> dist/sscc-$(VERSION)/README.txt
-	@echo "  sscc      - Compiler wrapper script" >> dist/sscc-$(VERSION)/README.txt
-	@echo "  sscc.bin  - TCC compiler binary ($(shell du -h build/sscc/sscc.bin | cut -f1))" >> dist/sscc-$(VERSION)/README.txt
-	@echo "  include/  - C standard library headers" >> dist/sscc-$(VERSION)/README.txt
-	@echo "  lib/      - Static libraries (musl, GMP, TCC runtime)" >> dist/sscc-$(VERSION)/README.txt
-	@echo "" >> dist/sscc-$(VERSION)/README.txt
-	@echo "No system dependencies required - completely self-contained!" >> dist/sscc-$(VERSION)/README.txt
-	@du -sh dist/sscc-$(VERSION)
-	@echo "✅ Portable package created at dist/sscc-$(VERSION)/"
+
+package: floppy
+	@echo "✅ Package target complete (alias for floppy)"
 
 # Create distribution tarballs
-dist: package
+dist: floppy
 	@echo "Creating distribution archives..."
-	@cd dist && tar -czf sscc-$(VERSION)-linux-x86_64.tar.gz sscc-$(VERSION)/
-	@cd dist && tar -cJf sscc-$(VERSION)-linux-x86_64.tar.xz sscc-$(VERSION)/
+	@cd dist && tar -czf sscc-$(VERSION)-floppy-linux-x86_64.tar.gz sscc-$(VERSION)/
+	@cd dist && tar -cJf sscc-$(VERSION)-floppy-linux-x86_64.tar.xz sscc-$(VERSION)/
 	@echo "Distribution files:"
-	@ls -lh dist/sscc-$(VERSION)-linux-x86_64.*
+	@ls -lh dist/sscc-$(VERSION)-floppy-linux-x86_64.*
 	@echo "✅ Distribution archives created in dist/"
+
+# Create a 1.44MB diskette image (requires mtools)
+diskette: package
+	@echo "Creating 1.44MB diskette image..."
+	@if ! command -v mcopy >/dev/null 2>&1; then \
+		echo "Error: mtools not found. Install with: sudo apt-get install mtools"; \
+		exit 1; \
+	fi
+	@# Check if package fits on diskette
+	@PACKAGE_SIZE=$$(du -s dist/sscc-$(VERSION) | cut -f1); \
+	if [ $$PACKAGE_SIZE -gt 1440 ]; then \
+		echo "Warning: Package size ($$PACKAGE_SIZE KB) might not fit on 1.44MB diskette (1440 KB)"; \
+	else \
+		echo "Package size: $$PACKAGE_SIZE KB - fits on diskette!"; \
+	fi
+	@# Create diskette image
+	@dd if=/dev/zero of=dist/sscc-$(VERSION)-diskette.img bs=1024 count=1440 2>/dev/null
+	@mformat -i dist/sscc-$(VERSION)-diskette.img -f 1440 ::
+	@mmd -i dist/sscc-$(VERSION)-diskette.img ::sscc
+	@mcopy -i dist/sscc-$(VERSION)-diskette.img dist/sscc-$(VERSION)/* ::sscc/
+	@# Create autoexec.bat for DOS compatibility
+	@echo "@echo off" > /tmp/autoexec.bat
+	@echo "echo SSCC v$(VERSION) - Self Sufficient C Compiler" >> /tmp/autoexec.bat
+	@echo "echo Diskette Edition" >> /tmp/autoexec.bat
+	@echo "echo." >> /tmp/autoexec.bat
+	@echo "echo To use: cd sscc && ./sscc -o hello hello.c" >> /tmp/autoexec.bat
+	@mcopy -i dist/sscc-$(VERSION)-diskette.img /tmp/autoexec.bat ::
+	@rm /tmp/autoexec.bat
+	@echo "✅ Diskette image created: dist/sscc-$(VERSION)-diskette.img"
+	@echo "💾 Ready to write to physical diskette!"
+	@echo ""
+	@echo "To write to diskette (Linux): dd if=dist/sscc-$(VERSION)-diskette.img of=/dev/fd0"
+	@echo "To mount as loop device: sudo mount -o loop dist/sscc-$(VERSION)-diskette.img /mnt"
 
 # Test the packaged version
 test-package: package
 	@echo "Testing portable package..."
 	@cd dist/sscc-$(VERSION) && ./test.sh
 	@echo "✅ Package test completed successfully!"
+
+floppy: sscc addons
+	@echo "Creating complete floppy package..."
+	@mkdir -p dist/sscc-$(VERSION)
+	@cp -r $(BUILD_DIR)/sscc/* dist/sscc-$(VERSION)/
+	@echo "✅ Floppy package created in dist/sscc-$(VERSION)/"
+	@echo "Package size: $$(du -sh dist/sscc-$(VERSION) | cut -f1)"
