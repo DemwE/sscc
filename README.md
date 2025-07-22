@@ -7,17 +7,9 @@ A self-contained C compiler based on TCC (Tiny C Compiler) with integrated runti
 SSCC integrates:
 - **TCC** - Fast, lightweight C compiler (v0.9.27)
 - **musl** - Lightweight C standard library (v1.2.5)
-- **GMP** - GNU Multiple Precision Arithmetic Library (v6.3.0) ✅
+- **GMP** - GNU Multiple Precision Arithmetic Library (v6.3.0)
 
 The resulting compiler is self-contained and can compile C programs without requiring external libraries or headers.
-
-### What's Fixed in This Version
-
-- ✅ **Newline handling** - `\n` in printf statements properly outputs newlines (not literal strings)
-- ✅ **No more warnings** - Removed implicit declaration warnings by properly including headers
-- ✅ **Help support** - `--help` and `-h` flags now work and display comprehensive usage information
-- ✅ **Complete build environment** - Updated development shell with all necessary dependencies
-- ✅ **Improved portability** - Packages work seamlessly across different Linux distributions
 
 ## Usage
 
