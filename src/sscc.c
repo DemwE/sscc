@@ -554,22 +554,6 @@ int main(int argc, char *argv[]) {
             printf("  -L DIR          Add library directory\n");
             printf("  -l LIB          Link with library\n");
             printf("\n");
-            printf("Core features (always available):\n");
-            printf("  • Complete C standard library (musl libc)\n");
-            printf("  • POSIX headers and functions\n");
-            printf("  • TCC runtime library\n");
-            printf("  • Static linking support\n");
-            printf("\n");
-            printf("Available addons (load as needed):\n");
-            printf("  • sscc-gmp.addon      - GNU Multiple Precision arithmetic\n");
-            printf("  • sscc-posix.addon    - Extended POSIX system calls\n");
-            printf("  • sscc-network.addon  - Network programming support\n");
-            printf("\n");
-            printf("Examples:\n");
-            printf("  sscc hello.c -o hello                    # Basic compilation\n");
-            printf("  sscc math.c --addon sscc-gmp.addon -lgmp # With GMP library\n");
-            printf("  sscc -Wall -O program.c -o program      # With warnings and optimization\n");
-            printf("\n");
             return 0;
         } else if (strcmp(argv[i], "-v") == 0 || strcmp(argv[i], "--version") == 0) {
             printf("SSCC v%s - Self Sufficient C Compiler\n", SSCC_VERSION);

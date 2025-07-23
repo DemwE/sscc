@@ -15,7 +15,7 @@ GMP_REPO = https://gmplib.org/download/gmp/gmp-6.3.0.tar.xz
 CFLAGS = -O2 -Wall
 LDFLAGS = -static
 
-VERSION = 1.2.0
+VERSION = 1.2.1
 
 .PHONY: all clean distclean setup deps tcc musl gmp sscc addons test dist compressed package help
 
@@ -74,7 +74,9 @@ tcc: musl gmp
 	./configure --prefix=$(PWD)/$(BUILD_DIR)/tcc \
 		--crtprefix=$(PWD)/$(BUILD_DIR)/musl/lib \
 		--libpaths=$(PWD)/$(BUILD_DIR)/musl/lib:$(PWD)/$(BUILD_DIR)/gmp/lib \
-		--config-musl && \
+		--sysincludepaths=$(PWD)/$(BUILD_DIR)/musl/include \
+		--config-musl \
+		--config-bcheck=no && \
 	$(MAKE) CPPFLAGS="-I$(PWD)/$(BUILD_DIR)/musl/include -I$(PWD)/$(BUILD_DIR)/gmp/include" \
 		CFLAGS="-I$(PWD)/$(BUILD_DIR)/musl/include -I$(PWD)/$(BUILD_DIR)/gmp/include" \
 		LDFLAGS="-L$(PWD)/$(BUILD_DIR)/musl/lib -L$(PWD)/$(BUILD_DIR)/gmp/lib" \
@@ -115,7 +117,11 @@ sscc: tcc
 	cp -r $(BUILD_DIR)/musl/include/* $(BUILD_DIR)/sscc/temp_include/
 	cp -r $(MUSL_DIR)/include/* $(BUILD_DIR)/sscc/temp_include/ 2>/dev/null || true
 	cp -r $(MUSL_DIR)/obj/include/* $(BUILD_DIR)/sscc/temp_include/ 2>/dev/null || true
+	# Copy both static libraries (.a) and C runtime startup files (.o)
 	cp $(BUILD_DIR)/musl/lib/*.a $(BUILD_DIR)/sscc/temp_lib/ 2>/dev/null || true
+	cp $(BUILD_DIR)/musl/lib/*.o $(BUILD_DIR)/sscc/temp_lib/ 2>/dev/null || true
+	# Also copy musl-gcc specs file if it exists
+	cp $(BUILD_DIR)/musl/lib/*.specs $(BUILD_DIR)/sscc/temp_lib/ 2>/dev/null || true
 	
 	# Build resource embedder with LZMA
 	@echo "Building resource embedder..."
